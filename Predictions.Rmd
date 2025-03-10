@@ -1,0 +1,1359 @@
+---
+title: "COSC 6323 Project Milestone 2"
+author: 
+  - "Anirudh Kalva - 2288613"
+  - "Venkata Kausik Renduchintala - 2260419"
+date: "2024-04-24"
+output:
+  pdf_document: 
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(jtools)
+library(cowplot)
+library(ggpubr)
+library(lme4)
+library(readr)
+library(lmerTest)
+library(lattice)
+library(gridExtra)
+library(kableExtra)
+require(ggpmisc) # for stat_poly_eq
+library(bestNormalize)
+library(FSA)
+library(rstatix)
+library(DescTools)
+library(MASS)
+library(lme4)
+library(sjPlot)
+library(buildmer)
+library(cAIC4)
+library(performance)
+```
+
+```{r include=FALSE}
+rm(list = ls())
+# dir <- dirname(rstudioapi::getSourceEditorContext()$path)
+# setwd(dir)
+# getwd()
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Df <- read.csv(paste0("c:/users/rvkau/Downloads/Affective-Math-Dataset_3.csv"), stringsAsFactors = T)
+
+rounded_timestamp <- function(timestamp) {
+  as.POSIXct(round(as.numeric(timestamp)/ 300)*300,origin = "1970-01-01" )
+}
+```
+
+
+```{r echo=FALSE}
+# Baseline Data
+# BL Data
+Df_BL <- Df[Df$Session == "BL", ]
+
+# Remove unnecessary columns
+Df_BL.SubSet <- subset(Df_BL,
+  select = c(ParticipantID, Perspiration, HR.E4, HR.AW, Time, HRV.IBI)
+)
+
+# Add NAs to S003 PP
+# Df_BL.SubSet$Perspiration[Df_BL.SubSet$ParticipantID == "S003"] <- NA
+
+# Adding pp_log column to the data
+Df_BL.SubSet["pp_log"] <- log(Df_BL.SubSet$Perspiration)
+
+
+# Sync E4 and AW HRs to have perfect E4
+# initialize the e4 perfect
+Df_BL.SubSet$HR.E4_perfect <- Df_BL.SubSet$HR.E4
+# Add NAs to perfect where the AW has NAs
+Df_BL.SubSet[is.na(Df_BL.SubSet$HR.AW), ]$HR.E4_perfect <- NA
+
+# Exam data
+Df_Exam <- Df[Df$Session == "Exam", ]
+# names(Df_Exam)
+# Remove unnecessary columns
+Df_Exam.SubSet <- subset(Df_Exam, select = -c(4, 5, 29:35))
+
+# colnames(Df_Exam.SubSet)
+# Fill the NAs with previous values.
+Df_Exam.SubSet <- Df_Exam.SubSet %>% fill(Question.Type)
+Df_Exam.SubSet <- Df_Exam.SubSet %>% fill(Question.Name)
+Df_Exam.SubSet <- Df_Exam.SubSet %>% fill(Accuracy.Score)
+Df_Exam.SubSet <- Df_Exam.SubSet %>% fill(Attempt)
+Df_Exam.SubSet <- Df_Exam.SubSet %>% fill(Total.Attempts)
+
+# Remove Examples
+Df_Exam.SubSet <- Df_Exam.SubSet[!Df_Exam.SubSet$Question.Type == "Example", ]
+
+# Remove 2nd and 3rd attempts
+# Means that take the all first attempts
+Df_Exam.SubSet <- Df_Exam.SubSet[Df_Exam.SubSet$Attempt == 1, ]
+
+# Rename Accuracy.Score, correct =1, incorrect = 0, as Attempt.Correctness
+Df_Exam.SubSet <- Df_Exam.SubSet %>% rename("Attempt.Correctness" = "Accuracy.Score")
+
+Df_Exam.SubSet["pp_log"] <- log(Df_Exam.SubSet$Perspiration)
+
+# Sync E4 and AW HRs to have perfect
+# initialize the e4 perfect
+Df_Exam.SubSet["HR.E4_perfect"] <- Df_Exam.SubSet$HR.E4
+
+# Add NAs to perfect where the AW has NAs
+Df_Exam.SubSet[is.na(Df_Exam.SubSet$HR.AW), ]$HR.E4_perfect <- NA
+
+# Update the index after sync
+rownames(Df_Exam.SubSet) <- 1:nrow(Df_Exam.SubSet)
+
+# Drop Example level in Question.Type
+Df_Exam.SubSet <- droplevels(Df_Exam.SubSet)
+
+# unique(Df_Exam.SubSet$Question.Type)
+
+Response.len <- colSums(!is.na(Df_Exam.SubSet))[["HR.E4_perfect"]]
+HR.len <- colSums(!is.na(Df_Exam.SubSet))[["HR.E4"]]
+AW.len <- colSums(!is.na(Df_Exam.SubSet))[["HR.AW"]]
+```
+
+## Perspiration Boxplot
+```{r echo=FALSE,fig.width=10, warning=FALSE}
+n_fun <- function(x) {
+  return(data.frame(y = mean(x) +30, label = paste0("~italic(n)", " == ", length(x))))
+}
+
+init_count_data <- Df_Exam.SubSet %>%
+  group_by(ParticipantID) %>%
+  summarise(n_Perspiration = sum(!is.na(Perspiration)),
+            n_HR.E4 = sum(!is.na(HR.E4)),
+            n_HR.AW = sum(!is.na(HR.AW)),
+            n_HRV.IBI = sum(!is.na(HRV.IBI)),
+            uq_Perspiration=quantile(Perspiration, probs = 0.75, na.rm = TRUE),
+uq_HR.E4=quantile(HR.E4, probs = 0.75, na.rm = TRUE),
+uq_HR.AW=quantile(HR.AW, probs = 0.75, na.rm = TRUE),
+uq_HRV.IBI=quantile(HRV.IBI, probs = 0.75, na.rm = TRUE))
+
+ggplot(Df_Exam.SubSet, aes(x = ParticipantID, y = Perspiration)) +
+  geom_boxplot() +
+  labs(title = "Perspiration by Participant ID", x = "Participant ID", y = "Perspiration") +
+  scale_x_discrete(limits = unique(Df_Exam.SubSet$ParticipantID)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.ticks.x = element_line(size = 0.5))+
+   geom_text(data = init_count_data,
+            aes(label = paste("n =", n_Perspiration)), 
+            x = factor(init_count_data$ParticipantID), y =init_count_data$uq_Perspiration, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+
+```
+**Insights**:
+
+  * From the above boxplots for Perspiration, it can be observed that outliers exist for S022 participant and S022 needs to be removed from better results from the models.
+  * Cook's distance is computed between HR.AW and HR.E4_Perfect to identify outliers in HR signal. We've identified 1123 pairs that were not in high agreement and removed them from consideration as unreliable
+  * We perform scaling inorder to bring all variables under same scale. For example, normalized log perspiration ranges from 0.005 but heart rate varies from 70 to 120. So, inorder to bring them to same scale, we perform scaling here
+  
+
+```{r include=FALSE}
+Df_Exam.SubSet <- Df_Exam.SubSet[Df_Exam.SubSet$ParticipantID != "S022", ]
+# Removing Outliers at Signal Level
+signal.lm.HRs <- lm(HR.E4_perfect ~ HR.AW, data = Df_Exam.SubSet)
+# Remove outlier with 95%
+cooksD <- cooks.distance(signal.lm.HRs)
+cooksD.95 <- quantile(cooksD, prob = c(.95))
+
+influential <- cooksD[(cooksD > cooksD.95)]
+
+names_of_influential <- names(influential)
+# influential
+df_outlier <- Df_Exam.SubSet[names_of_influential, ]
+
+# Remove outliers
+Df_Exam.SubSet <- Df_Exam.SubSet %>% anti_join(df_outlier)
+
+# Update the index after filters
+rownames(Df_Exam.SubSet) <- 1:nrow(Df_Exam.SubSet)
+```
+
+```{r include=FALSE}
+# Baseline Means
+
+Df_BL.SubSet2 <- Df_BL.SubSet %>%
+  group_by(ParticipantID) %>%
+  summarise(
+    pp.mean = mean(Perspiration, na.rm = T),
+    pp_log_mean = mean(pp_log, na.rm = T),
+    HR.E4_mean = mean(HR.E4, na.rm = T),
+    HR.E4.perfect_mean = mean(HR.E4_perfect, na.rm = T),
+    HR.AW_mean = mean(HR.AW, na.rm = T),
+    HRV.IBI_mean = mean(HRV.IBI, na.rm = T)
+  )
+
+Df_Exam.SubSet2 <- Df_Exam.SubSet %>%
+  group_by(ParticipantID, Question.Name, Question.Type) %>%
+  summarise(
+    Question.Order = first(Question.Order),
+    Question.Number = first(Question.Number),
+    q.solv.time = n(),
+    grade = first(Attempt.Correctness),
+    pp.mean = mean(Perspiration, na.rm = T),
+    pp_log_mean = mean(pp_log, na.rm = T),
+    HR.E4_mean = mean(HR.E4, na.rm = T),
+    HR.E4.perfect_mean = mean(HR.E4_perfect, na.rm = T),
+    HR.AW_mean = mean(HR.AW, na.rm = T),
+    HRV.IBI_mean = mean(HRV.IBI, na.rm = T)
+  )
+
+
+# initialize new columns
+
+Df_Exam.SubSet2$pp_normalized <- NA
+Df_Exam.SubSet2$pp_log_normalized <- NA
+
+Df_Exam.SubSet2$hr.e4_normalized <- NA
+Df_Exam.SubSet2$hr.e4_perfect_normalized <- NA
+Df_Exam.SubSet2$hr.aw_normalized <- NA
+Df_Exam.SubSet2$hrv.ibi_normalized <- NA
+
+for (p in unique(Df_Exam.SubSet$ParticipantID)) {
+  # PP Mean
+  tmpExam_pp.mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$pp.mean
+  tmpBL_pp.mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$pp.mean
+
+  # PP Log Mean
+  tmpExam_PP_Log_Mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$pp_log_mean
+  tmpBL_PP_Log_Mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$pp_log_mean
+
+  # HR.E4 Mean
+  tmpExam_HR.E4_Mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$HR.E4_mean
+  # you might need E4 perfected Exam, too
+  tmpExam_HR.E4_Perfect_Mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$HR.E4.perfect_mean
+
+  tmpBL_HR.E4_Mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$HR.E4_mean
+  tmpBL_HR.E4_Perfect_Mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$HR.E4.perfect_mean
+
+
+  # HR.AW Mean
+  tmpExam_HR.AW_Mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$HR.E4_mean
+  tmpBL_HR.AW_Mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$HR.AW_mean
+
+  # HR.IBI Mean
+  tmpExam_HRV.IBI_Mean <- Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$HRV.IBI_mean
+  tmpBL_HRV.IBI_Mean <- Df_BL.SubSet2[Df_BL.SubSet2$ParticipantID == p, ]$HRV.IBI_mean
+  
+
+
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$pp_normalized <- tmpExam_pp.mean - tmpBL_pp.mean
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$pp_log_normalized <- tmpExam_PP_Log_Mean - tmpBL_PP_Log_Mean
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$hr.e4_normalized <- tmpExam_HR.E4_Mean - tmpBL_HR.E4_Mean
+
+
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$hr.e4_perfect_normalized <- tmpExam_HR.E4_Perfect_Mean - tmpBL_HR.E4_Perfect_Mean
+
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$hr.aw_normalized <- tmpExam_HR.AW_Mean - tmpBL_HR.AW_Mean
+  Df_Exam.SubSet2[Df_Exam.SubSet2$ParticipantID == p, ]$hrv.ibi_normalized <- tmpExam_HRV.IBI_Mean - tmpBL_HRV.IBI_Mean
+
+
+  print(p)
+}
+
+# names(Df_Exam.SubSet2)
+```
+
+```{r include=FALSE}
+rm(Qlevel)
+Qlevel <- merge(Df_Exam.SubSet2, unique(Df_Exam.SubSet[
+  ,
+  c("ParticipantID", "Gender", "SAI.Score"
+    , "SUS.Score", "course_cat", "overall.Score"
+    )
+]),
+by.x = "ParticipantID", by.y = "ParticipantID", all.x = TRUE
+)
+
+
+Qlevel <- droplevels(Qlevel)
+
+table(Qlevel$Question.Type)
+unique(Qlevel$Question.Type)
+
+# names(Qlevel)
+
+Qlevel$Gender <- as.factor(Qlevel$Gender)
+
+Qlevel$Question.Type <- as.factor(Qlevel$Question.Type)
+```
+
+## Relevel the factors
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Base gender M
+Qlevel_rl <- within(Qlevel, Gender <- relevel(Gender, ref = "M"))
+
+# Base Question.Type W -  # Question.Type => V > W=A
+Qlevel_rl$Question.Type <- factor(Qlevel_rl$Question.Type)
+Qlevel_rl <- within(Qlevel, Question.Type <- relevel(Question.Type, ref = "V"))
+# names(Qlevel_rl)
+```
+
+
+```{r echo=FALSE}
+# str(Qlevel_rl)
+Qlevel_rl$q.solv.time <- scale(Qlevel_rl$q.solv.time)
+Qlevel_rl$pp_log_normalized <- scale(Qlevel_rl$pp_log_normalized)
+Qlevel_rl$pp_log_mean <- scale(Qlevel_rl$pp_log_mean)
+Qlevel_rl$HR.E4.perfect_mean <- scale(Qlevel_rl$HR.E4.perfect_mean)
+Qlevel_rl$HRV.IBI_mean <- scale(Qlevel_rl$HRV.IBI_mean)
+Qlevel_rl$hr.e4_perfect_normalized <- scale(Qlevel_rl$hr.e4_perfect_normalized)
+Qlevel_rl$hrv.ibi_normalized <- scale(Qlevel_rl$hrv.ibi_normalized)
+Qlevel_rl$SAI.Score <- scale(Qlevel_rl$SAI.Score)
+Qlevel_rl$SUS.Score <- scale(Qlevel_rl$SUS.Score)
+Qlevel_rl$overall.Score <- scale(Qlevel_rl$overall.Score)
+Qlevel_rl$grade <- as.factor(Qlevel_rl$grade)
+```
+
+# Inspection of the data
+
+## Correlation check
+
+```{r fig.height=13, fig.width=13}
+library(ggcorrplot)
+# colnames(Qlevel_rl)
+reduced_data <- subset(Qlevel_rl, select = c("Gender", "SAI.Score", "Question.Type", "grade", "Question.Order", "q.solv.time", "course_cat"))
+
+model.matrix(~0+., data=reduced_data) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE)
+```
+
+
+**Insights**:
+
+  * From the above correlation matrix, it can be observed that no strong positive correlation exists between the predictor variables for Perspiration, HR and HRV.IBI response variables.
+  * It can be inferred that negative correlation between Gender, SAI.score and Question type, question solving time.
+
+# Generalized linear modeling using perinasal perspiration as the response variable
+## PP Fixed Full Model 
+
+```{r echo=FALSE}
+
+pp_multi_model1 <- glm(pp_log_normalized ~ Question.Type+ Gender+ SAI.Score  + grade + Question.Order + q.solv.time +course_cat + SUS.Score, data = Qlevel_rl)
+
+summary(pp_multi_model1)
+
+```
+
+## PP Full Model plots
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(pp_multi_model1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+**Insights** 
+ 
+  -  The reference variable here for predictor is question_type_V and it is selected because it has lower heart rate below the bottom line.
+ - From the fitted model it can be seen that the variables Question.TypeW, GenderM, q.solv.time,course_catdevelopmental, SAI.score and the SUS.Score has a p value <0.05 which means that they are significant variables for fitting the model.
+ - Predictors like Question.TypeA, grade1 and Question_Order seems non significant due to the being p>0.05 , and which can be excluded to improve the model performance
+ - The estimates here show how much each predictor is able to predict the Perinasal Perspiration. .
+ - Some variables positively predict the PP and some negatively predict it .
+ - Some predictors like Question.TypeW and grade1 predictors have positive estimates indicates that an increase in those predictors would result in the increase of the PP.
+ - Similarly the negative estimates like the Gender[M] ,SAI score, SUS score, Question indicate that increase in or variation of these predictors shows inverse decreasing trend of the PP. 
+ - The significance of the model's coefficients and overall model fit statistics indicates that the selected predictor variables collectively contribute to explaining the variation in PP to some extent.
+ - To identify the quality of fitting of the model we find the AIC score, the lower the AIC score the best is the model's fitting.
+
+
+## Full Model Assumption Checking
+
+
+```{r echo=FALSE, fig.height=10, fig.width=10}
+par(mfrow = c(2,2))
+plot(pp_multi_model1)
+
+```
+
+**Insights From the Plots**
+
+1. **Residual Vs Fitted Plot**:
+
+  - This plot describes the linearity of the regression.
+  - From the plot we can say that non-linearity exists as the red line moves to negative values from zero .
+  - There is more points cluttered at a some point till the mid of the scale means a little under dispersion and more cluttering.
+
+2. **QQ Plot**:
+
+  - This plot describes the normality of the residuals values .
+  - From the the plot we can observe that distribution is not normal as it is right skewed and has some outliers and removal of this outliers using different methods can improve the model performance.
+
+
+3. **Scale location Plot**:
+
+  - This plot describes the variability of the distribution.
+  - It can be seen that there is variablity in the distribution as the points seems scattered allover indicating wide variability.
+  - Plot implies that the variance is near to equality but not actually equal as indicated by the red line as it need to be horizontal .
+
+  
+4. **Residuals vs Leverages**:
+
+  - This plot visualizes the existence of the influential points in data.
+  - The distribution does show some outlier points but are influential and removing them might help improve model performance.
+
+
+## AIC
+
+```{r echo=FALSE}
+library(stargazer)
+step.optimal <- stepAIC(pp_multi_model1, trace = TRUE, direction= "both")
+
+# Compare the models
+stargazer(pp_multi_model1, step.optimal, type = "text")
+
+```
+
+## Backward elimination
+
+```{r echo=FALSE}
+library(olsrr)
+# Backward elimination
+optimal_be = pp_multi_model1 %>% 
+  ols_step_backward_p(details = F)
+
+optimal_be
+
+```
+
+## Forward Elimination
+
+```{r echo=FALSE}
+# Forward elimination
+optimal_fe = pp_multi_model1 %>% 
+  ols_step_forward_p(details = TRUE)
+
+optimal_fe
+
+```
+
+## Stepwise Elimination
+
+```{r echo=FALSE}
+
+# Stepwise elimination
+ optimal_se = pp_multi_model1 %>%
+   ols_step_both_p(details = TRUE)
+
+optimal_se
+
+```
+
+## Backward Elimination (BE) Optimal Model Selection
+
+```{r echo=FALSE}
+
+step_bw <- step(pp_multi_model1, direction = "backward", trace = TRUE)
+summary(step_bw) 
+
+
+```
+
+**Insights**
+
+ - The Step AIC shows what happens when each of the predictors is excluded from the model fitting and the one with the lowest AIC is the best way to go for model fitting.
+ - From the result we can observe that the when we remove Question.Order, grade from the list of the predictors, the AIC is the lowest when compared to the others.
+  - This implies that excluding those would improve the model performance and increase the explainability.
+  - From the various optimization techniques employed which are the backward , forward  elimiation and selection methods it can concluded that the predictors like grade and Question.Order being the non significant variables can be eliminated from the model fitting as this results having the significant variables  SUS.Score,   course_cat,Question.Type, q.solv.time, SAI.Score and Gender giving the lowest AIC score which indicates better model fitting relative to the number of parameters and a increased in the Adjusted R- squared value shows the collective degree of predictability of PP by the predictors.
+
+## PP Optimal Model with Fixed effects from step_bw
+
+```{r echo=FALSE}
+#get model from step_bw
+final_pp_multi_model1.bw <- eval(step_bw$call)
+summary(final_pp_multi_model1.bw)
+AIC(final_pp_multi_model1.bw)
+
+```
+
+## PP Final Model Assumption Checking: Diagonistic Plot
+
+```{r echo=FALSE, fig.height=7}
+par(mfrow=c(2,2))
+plot(final_pp_multi_model1.bw)
+```
+
+## Final PP Model plots
+
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(final_pp_multi_model1.bw,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+```
+**Insights**
+
+ - From the optimal model we see a decrease in the model AIC indicating the improvement of the model performance due to removal of non significant predictors and having the only the significant variables like Question.Type ,Gender , SAI.Score , q.solv.time , course_cat , SUS.Score.
+ - The estimates plot show that there is positive estimates for Question type W and course_catdevelopmental which means that when we the subject sees the W question type , the PP increases or the for the course category development the PP increases.
+ - Negative estimates like Gender M indicate that the PP seems to be less for the males and the others like Question type A , SAI score , SUS Score and qsolve time are negative estimates but are at moderate to low level.
+
+\newpage
+## Perspiration Full Model with Random effects 
+
+```{r echo=FALSE}
+FullModel1 <- glmer(pp_log_normalized ~ Gender + grade + q.solv.time + SAI.Score + Question.Type + (1|ParticipantID),  data = Qlevel_rl)
+summ(FullModel1)
+```
+
+\newpage
+## Perspiration Full Model Fixed effects plot
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(FullModel1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+\newpage
+## Perspiration Full Model Random Effects Plot
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+\newpage
+## Manual Optimization
+## Removing Question Solve Time
+```{r echo=FALSE}
+FullModel1 <- glmer(pp_log_normalized ~ Gender + grade + SAI.Score + Question.Type + (1|ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing Grade
+```{r echo=FALSE}
+FullModel1 <- glmer(pp_log_normalized ~ Gender + SAI.Score + Question.Type + (1|ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing SAI Score
+```{r echo=FALSE}
+FullModel1 <- glmer(pp_log_normalized ~ Gender + Question.Type + (1|ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing Gender
+```{r echo=FALSE}
+FullModel1 <- glmer(pp_log_normalized ~ Question.Type + (1|ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Perspiration Optimal Model with random effects Estimates plot
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(FullModel1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+\newpage
+## Perspiration Optimal Model Random Effects Plot
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+\newpage
+```{r echo=FALSE}
+
+qc.pm <- plot_model(FullModel1,
+  type = "pred",
+  terms = "Question.Type",
+  dot.size = 6,
+  line.size = 2,
+  title = ""
+) + theme_bw() +
+  # aes(color = "Question.Type") +
+  # scale_color_manual(values = "orange") +
+  aes(color = c("1", "2", "3")) + # V      A      W
+  scale_color_manual(values = c("gray", "black", "red")) +
+  # scale_x_discrete(labels  = c("V" = "VV","A" = "AA","W" = "WW"))+
+  # scale_x_discrete(limits = c("1", "2", "3"))+
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(size = 10, face = "bold.italic"),
+    axis.text.y = element_text(size = 10, face = "bold"),
+    legend.position = "none"
+  ) + labs(x = "", y = expression(bold(paste(bar(Delta * ln * " " * bolditalic(PP[f]) * ""), "  [", degree, "C"^2, "]"))))
+#  labs(x="", y=expression(bold(paste(bar(Delta*ln*EDA[f] * ""), "   [", degree, " C"^2, "]"))))
+
+qc.pm
+ 
+# activity.plot
+```
+
+**Insights**:
+
+  * We implement glmer with Perspiration as response variable and random effects on ParticipantID.
+  * By incorporating random effects for Participant IDs, the mixed-effects model accounts for within group correlations, thereby reducing potential biases in parameter estimates and resulting in better model fit and a decreased AIC.
+  * From the full model summary with random effects, it can be observed that only Question.Type is significant with positive estimate values. Although, grade has a positive estimate, it is still not significant and hence can be removed from the model.
+  * From the random effects plot for the full model, it can be inferred that participants S030, S027, S023, S019 etc have strong positive random effect indicating that they have higher perspiration during the exam. Thereby leading to more stress in these participants.
+  * However, for participants which are to the left of average line have lower perspiration levels indicating lower stress.
+  * The model is further optimized by removing each variable that is not significant manually in the order of it's p-value.
+  * Question solving time is removed first and a drop in AIC is observed from 2207 to 2201 with all other variables still being non-significant expect Question.Type.
+  * On further optimizing the model, we remove Grade, SAI.Score and Gender to obtain an optimal model with only Question.Type predictor and random effect on ParticipantID with an AIC of 2192 and R2 of 0.57.
+  * On removing the non-significant predictors to obtain the optimal model, no drastic change in R2 can be observed
+  * This indicates that, word question type can lead to more perspiration in participants thereby leading to more stress.
+  * From the predictor plots for Question.Type against Perspiration, it can be observed that video exam can lead to less perspiration with word exam type leading to higher perspiration levels and stress. 
+  * The reason for this is that video exam includes a bit of humour in answering them and thus participants do not feel stressed when attempting video exam questions.
+
+\newpage
+
+# Generalized linear modeling using HR as the response variable
+## HR Fixed Full Model 
+
+```{r echo=FALSE}
+
+hr_multi_model1 <- glm(hr.e4_perfect_normalized ~ Question.Type+ Gender+ SAI.Score  + grade + Question.Order + q.solv.time +course_cat + SUS.Score, data = Qlevel_rl)
+
+summary(hr_multi_model1)
+
+```
+
+## HR Full Model plots
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(hr_multi_model1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+
+**Insights** 
+
+ - From the fitted model it can be seen that the variables Question.TypeW, GenderM, ,course_catdevelopmental, SAI.Score, grade1 and the SUS.Score has a p value <0.05 which means that they are significant variables for fitting the model.
+ - Predictors like and Question_Order and q.solv.time seems non significant due to the being p>0.05 , and which can be excluded to improve the model performance
+ - The estimates here show how much each predictor is able to predict the HR which is being measured from the E4 device.
+ - Some variables positively predict the HR and some negatively predict it .
+ - Some predictors like Question.TypeA,Question.TypeW, GenderM, ,course_catdevelopmental,  grade1 and  have positive estimates indicates that an increase in those predictors would result in the increase of the HR.
+ - Here we see that the qsolvetime and Question.order are also positive estimates but we tend to ignore them due to non significance in the model fitting.
+ - Similarly the negative estimates like the Gender[M] ,SAI score, SUS score indicate that variation of these predictors shows decreasing trend of the HR. 
+ - To identify the quality of fitting of the model we find the AIC score, the lower the AIC score the best is the model's fitting.
+ 
+ 
+ 
+## HR Full Model Assumption Checking
+
+```{r echo=FALSE, fig.height=10, fig.width=10}
+par(mfrow = c(2,2))
+plot(hr_multi_model1)
+
+```
+
+**Insights From the Plots**
+
+1. **Residual Vs Fitted Plot**:
+
+  - This plot describes the linearity of the regression.
+  - From the plot we can say that non-linearity exists as the red line moves to unevely from negative to positive values .
+  - There are more points cluttered at a some point till the mid of the scale means a little under dispersion and more cluttering.
+
+2. **QQ Plot**:
+
+  - This plot describes the normality of the residuals values .
+  - From the the plot we can observe that distribution is near to normal and no to little skeweness in the right and has some outliers and removal of this outliers using different methods can improve the model performance.
+
+
+3. **Scale location Plot**:
+
+  - This plot describes the variability of the distribution.
+  - It can be seen that there is variability in the distribution as the points seems scattered allover.
+  - Plot implies that the variance is near to equality but not actually equal as indicated by the red line as it need to be horizontal .
+
+  
+4. **Residuals vs Leverages**:
+
+  - This plot visualizes the existence of the influential points in data.
+  - The distribution does show some outliers but are not influential and removing them would help improve model performance.
+
+
+## HR AIC
+
+```{r echo=FALSE}
+library(stargazer)
+step.optimal <- stepAIC(hr_multi_model1, trace = TRUE, direction= "both")
+
+# Compare the models
+stargazer(hr_multi_model1, step.optimal, type = "text")
+
+```
+
+## HR Backward elimination
+
+```{r echo=FALSE}
+library(olsrr)
+# Backward elimination
+optimal_be = hr_multi_model1 %>% 
+  ols_step_backward_p(details = F)
+
+optimal_be
+
+```
+
+## HR Forward Elimination
+
+```{r echo=FALSE}
+# Forward elimination
+optimal_fe = hr_multi_model1 %>% 
+  ols_step_forward_p(details = TRUE)
+
+optimal_fe
+
+```
+
+## HR Stepwise Elimination
+
+```{r echo=FALSE}
+
+# Stepwise elimination
+ optimal_se = hr_multi_model1 %>%
+   ols_step_both_p(details = TRUE)
+
+optimal_se
+
+```
+
+## Backward Elimination (BE) for HR Optimal Model Selection
+
+```{r echo=FALSE}
+
+step_bw <- step(hr_multi_model1, direction = "backward", trace = TRUE)
+summary(step_bw) 
+
+
+```
+
+**Insights**
+
+ - The Step AIC shows what happens when each of the predictors is excluded from the model fitting and the one with the lowest AIC is the best way to go for model fitting.
+ - From the result we can observe that the when we remove Question.Order from the list of the predictors, the AIC is the lowest when compared to the others.
+  - This implies that excluding those would improve the model performance and increase the explainability.
+  - The reason we can remove Question.order here is that the heart rate doesn't depend on the order of the questions since the question order is randomized. If the participant had known the question order in prior, it would've affected his heart rate and stress since he might know if the next question is going to ba tough or easy.
+  - From the various optimization techniques employed which are the backward, forward  elimination and selection methods it can concluded that the predictors like question solve time and Question.Order being the non significant variables can be eliminated from the model fitting as this results having the significant variables  SUS.Score,   course_cat,Question.Type, SAI.Score and Gender giving the lowest AIC score which indicates better model fitting relative to the number of parameters and a increased in the Adjusted R- squared value shows the collective degree of predictability of HR by the predictors.
+
+
+## Get final HR model with Fixed effects from step_bw
+
+```{r echo=FALSE}
+#get model from step_bw
+final_hr_multi_model1.bw <- eval(step_bw$call)
+summary(final_hr_multi_model1.bw)
+AIC(final_hr_multi_model1.bw)
+
+```
+
+## Final HR Model with Fixed Effects Assumption Checking: Diagonistic Plot
+
+```{r echo=FALSE, fig.height=7}
+par(mfrow=c(2,2))
+plot(final_hr_multi_model1.bw)
+```
+
+## Final HR Model with Fixed effects plots
+
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(final_hr_multi_model1.bw,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+```
+
+**Insights**
+
+ - From the optimal model we see a decrease in the model AIC indicating the improvement of the model performance due to removal of non significant predictors and having only the significant variables like Question.Type ,Gender, SAI.Score , course_cat, SUS.Score.
+ - The estimates plot show that there is positive estimates for Question type W and Question type A which means that when we the subject sees the W or A question types , the HR increases.
+ - SUS score has the high negative estimates indicating that HR increases as the SUS score decreases or vice versa.
+ 
+## HR Full Model with Random Effects
+
+```{r echo=FALSE}
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Gender + Question.Type + q.solv.time + Question.Order + SAI.Score + grade
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+## HR Full Model Fixed effects plot
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(FullModel1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+## HR Full Model Random Effects Plot
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+\newpage
+## Manual Optimization
+## Removing Gender
+```{r echo=FALSE}
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Question.Type + q.solv.time + Question.Order + SAI.Score + grade
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing Question.Order
+```{r echo=FALSE}
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Question.Type + q.solv.time + SAI.Score + grade
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing SAI.Score
+```{r echo=FALSE}
+library(jtools)
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Question.Type + q.solv.time + grade
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing grade
+
+```{r echo=FALSE}
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Question.Type + q.solv.time
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## HR Optimal Model with Random Effects
+
+```{r echo=FALSE}
+FullModel1 <- glmer(hr.e4_perfect_normalized ~ Question.Type
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## HR Optimal Model Random effects plot
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(FullModel1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+\newpage
+## HR Optimal Model Random Effects Plot
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+```{r echo=FALSE}
+# summary(final_hr_multi_model.bw)
+
+qc.pm <- plot_model(FullModel1,
+  type = "pred",
+  terms = "Question.Type",
+  dot.size = 6,
+  line.size = 2,
+  title = ""
+) + theme_bw() +
+  # aes(color = "Question.Type") +
+  # scale_color_manual(values = "orange") +
+  aes(color = c("1", "2", "3")) + # V      A      W
+  scale_color_manual(values = c("gray", "black", "red")) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(size = 10, face = "bold.italic"),
+    axis.text.y = element_text(size = 10, face = "bold"),
+    legend.position = "none"
+  ) + labs(x = "", y = expression(bold(paste(bar(Delta ~ bolditalic(HR) * " "), " [BPM]"))))
+
+qc.pm
+ 
+# activity.plot
+```
+
+Insights:
+
+  * We implement glmer with Perspiration as response variable and random effects on ParticipantID.
+  * By incorporating random effects for Participant IDs, the mixed-effects model accounts for within group correlations, thereby reducing potential biases in parameter estimates and resulting in better model fit and a decreased AIC.
+  * From the full model summary with random effects, it can be observed that only Question.Type is significant with positive estimate values. Although, grade and qsolve time have positive estimates, they is still not significant and hence can be removed from the model.
+  * From the random effects plot for the full model, it can be inferred that participants S009, S023, S019 etc have strong positive random effect indicating that they have higher HR during the exam. Thereby leading to more stress in these participants.
+  * However, for participants which are to the left of average line have lower perspiration levels indicating lower stress.
+  * The model is further optimized by removing each variable that is not significant manually in the order of it's p-value.
+  * Gender is removed first and a drop in AIC is observed from 1994 to 1991 with all other variables still being non-significant expect Question.Type.
+  * On further optimizing the model, we remove Question.Order,SAI.score, Question Solving time and grade to obtain an optimal model with only Question.Type predictor and random effect on ParticipantID with an AIC of 1964.12 and R2 of 0.62.
+  * On removing the non-significant predictors to obtain the optimal model, no drastic change in R2 can be observed but the AIC tends to decrease gradually indicating the goodness of the fitted model.
+  * When the predictors plot is plotted we see that in between Question type A and W , W has highest estimate which indicates that, word question type can lead to more HR in participants thereby leading to more stress.
+  * The random effects plot from the optimal model suggests that participants like S009, S020, S023 etc have strong positive random effects indicating that they have higher HR during the exam. Thereby leading to more stress in these participants.
+  * Concluding, when we plot the HR model with the Question.Type which is the significant predictor we see that the W question type results in more HR when compared to A and V , here V is our baseline measure taken in-order to the understand the HR.
+
+\newpage
+
+# Generalized linear modeling using HRV.IBI as the response variable
+## HRV.IBI Fixed Full Model 
+
+```{r echo=FALSE}
+
+hrv_multi_model1 <- glm(hrv.ibi_normalized ~ Question.Type + Gender+ SAI.Score  + grade + Question.Order + q.solv.time + course_cat + SUS.Score, data = Qlevel_rl)
+
+summary(hrv_multi_model1)
+
+```
+**Insights**:
+
+  * From the full model with fixed effects for HRV.IBI, it can be inferred that Question.Order and question solving time is not significant with p-value greater than 0.05 although Question.Order has a positive estimate.
+  * It can be observed that SUS.Score and SAI.Score positively estimate HRV with high significance.
+  * From the residual vs fitted plot, it can be observed that regression line is not perfectly straight indicating non-linearity in the model.
+  * Further, the residuals vs leverage plot indicate that no influential points are observed in the model as there are Cook's distance lines present in plot.
+  * The QQ plot indicate that the data is highly right skewed with around 40% of the data moving away from the normal line.
+  * From the Scale-Location graph, the regression line is not linear thereby concluding that the distribution doesn't have constant variability.
+  
+## HRV.IBI Full Model plots
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(hrv_multi_model1,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+
+```
+
+**Insights**:
+
+  - From the full model with fixed effects for HRV.IBI, it can be inferred that Question.Order and question solving time is not significant with p-value greater than 0.05 although Question.Order has a positive estimate.
+  - It can be observed that SUS.Score and SAI.Score positively estimate HRV with high significance.
+  - Here the SUS Score , SAI Score, grade[1], coursecat[development] has postive estimates indicating increase or variation in those variables increases the HRV.
+  - Question type A and W seems to be a negative estimate of the HRV.
+  -If we observe the Question.Order seems to be a positive estimate but due to its non significance from the model we tend to ignore.
+
+## HRV Full Model Assumption Checking
+
+```{r echo=FALSE, fig.height=10, fig.width=10}
+par(mfrow = c(2,2))
+plot(hrv_multi_model1)
+
+```
+
+**Insights**
+
+ - From the residual vs fitted plot, it can be observed that regression line is not perfectly straight indicating non-linearity in the model.
+  - Further, the residuals vs leverage plot indicate that no influential points are observed in the model as there are Cook's distance lines present in plot.
+  - The QQ plot indicate that the data is highly right skewed with around 40% of the data moving away from the normal line.
+  - From the Scale-Location graph, the regression line is not linear thereby concluding that the distribution doesn't have constant variability.
+
+## HRV AIC
+
+```{r echo=FALSE}
+library(stargazer)
+step.optimal <- stepAIC(hrv_multi_model1, trace = TRUE, direction= "both")
+
+# Compare the models
+stargazer(hrv_multi_model1, step.optimal, type = "text")
+
+```
+
+**Insights**
+  
+  * On performing stepAIC optimization, non significant variables question solve time, grade and Question.Order are removed to improve the AIC from 2699.51 to 2697.87. Although,  
+## HRV Backward elimination
+
+```{r echo=FALSE}
+library(olsrr)
+# Backward elimination
+optimal_be = hrv_multi_model1 %>% 
+  ols_step_backward_p(details = F)
+
+optimal_be
+
+```
+
+## HRV Forward Elimination
+
+```{r echo=FALSE}
+# Forward elimination
+optimal_fe = hrv_multi_model1 %>% 
+  ols_step_forward_p(details = TRUE)
+
+optimal_fe
+
+```
+
+## HRV Stepwise Elimination
+
+```{r echo=FALSE}
+
+# Stepwise elimination
+ optimal_se = hrv_multi_model1 %>%
+   ols_step_both_p(details = TRUE)
+
+optimal_se
+
+```
+
+## Backward Elimination (BE) for HRV Optimal Model Selection
+
+```{r echo=FALSE}
+
+step_bw <- step(hrv_multi_model1, direction = "backward", trace = TRUE)
+summary(step_bw) 
+
+
+```
+
+**Insights**
+
+ - The Step AIC shows what happens when each of the predictors is excluded from the model fitting and the one with the lowest AIC is the best way to go for model fitting.
+ - From the result we can observe that the when we remove qsolve.time  from the list of the predictors, the AIC is the lowest when compared to the others.
+  - This implies that excluding those would improve the model performance and increase the explainability.
+  - From the various optimization techniques employed which are the backward, forward  elimination and selection methods it can concluded that the predictors like qsolve time and being the non significant variables can be eliminated from the model fitting.
+  From step wise elimination we see that eliminating qsolvetime and Question.Order results in better AIC.
+  This results in having the significant variables SUS.Score,   course_cat,Question.Type, SAI.Score and Gender giving the lowest AIC score which indicates better model fitting relative to the number of parameters and a increased in the Adjusted R- squared value shows the collective degree of predictability of HR by the predictors.
+  
+## HRV Optimal model with Fixed effects from step_bw
+
+```{r}
+#get model from step_bw
+final_hrv_multi_model1.bw <- eval(step_bw$call)
+summary(final_hrv_multi_model1.bw)
+AIC(final_hrv_multi_model1.bw)
+
+```
+
+## Final HRV Model with Fixed Effects Assumption Checking: Diagonistic Plot
+
+```{r echo=FALSE, fig.height=7}
+par(mfrow=c(2,2))
+plot(final_hrv_multi_model1.bw)
+```
+
+## Final HRV Model with Fixed effects plots
+
+```{r echo=FALSE}
+m.plot <- sjPlot::plot_model(final_hrv_multi_model1.bw,
+                   show.values=TRUE, show.p=TRUE,
+                   title="") + 
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+       ) + theme_bw()
+
+m.plot
+```
+
+**Insights**
+
+ - From the optimal model we see a decrease in the model AIC indicating the improvement of the model performance due to removal of non significant predictors and having the only the significant variables like Question.Type ,Gender , SAI.Score , course_cat , SUS.Score.
+ - The estimates plot show that there is negative estimates for Question.Type and Gender[M] are negative estimates.
+ - SUS score and SAI.score and course category [development] has the positive estimates indicating that th HRV increases as the given positive estimates increase.
+
+\newpage
+## HRV.IBI Full Model with Random Effects
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~ Gender + Question.Type + q.solv.time + Question.Order + SAI.Score + grade
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+
+\newpage
+## HRV.IBI Full Model with Random effects Estimates plot
+
+```{r echo=FALSE}
+## Here we will plot the fixed effects
+plot_model(FullModel1, "est", sort = TRUE, show.values = TRUE, value.offset = .3, xlab = "")
+```
+
+\newpage
+## HRV.IBI Full model random effects plot
+
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+\newpage
+## Manual optimization
+## Removing Grade
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~ Gender + Question.Type + q.solv.time + Question.Order + SAI.Score
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing Gender
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~ Question.Type + q.solv.time + Question.Order + SAI.Score 
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing SAI.Score
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~ Question.Type + q.solv.time + Question.Order
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## Removing Question Solve Time
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~  Question.Type + Question.Order
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+
+\newpage
+## HRV.IBI Optimal Model with Random Effects
+```{r echo=FALSE}
+FullModel1 <- glmer(hrv.ibi_normalized ~  Question.Type
+  + (1 | ParticipantID), data = Qlevel_rl)
+summ(FullModel1)
+# anova(FullModel1)
+```
+```{r echo=FALSE}
+## Here we will plot the fixed effects
+plot_model(FullModel1, "est", sort = TRUE, show.values = TRUE, value.offset = .3, xlab = "")
+```
+
+\newpage
+## HRV.IBI Full model random effects plot
+
+```{r echo=FALSE}
+## Here we will plot the random effects
+re.plot <- plot_model(FullModel1, "re")
+re.plot
+```
+
+```{r echo=FALSE}
+# summary(final_hr_multi_model.bw)
+
+qc.pm <- plot_model(FullModel1,
+  type = "pred",
+  terms = "Question.Type",
+  dot.size = 6,
+  line.size = 2,
+  title = ""
+) + theme_bw() +
+  # aes(color = "Question.Type") +
+  # scale_color_manual(values = "orange") +
+  aes(color = c("1", "2", "3")) + # V      A      W
+  scale_color_manual(values = c("gray", "black", "red")) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(size = 10, face = "bold.italic"),
+    axis.text.y = element_text(size = 10, face = "bold"),
+    legend.position = "none"
+  ) + labs(x = "", y = expression(bold(paste(bar(Delta ~ bolditalic(HRV.IBI) * " "), " [ms]"))))
+
+qc.pm
+ 
+# activity.plot
+```
+
+**Insights**:
+
+  * We implement glmer with HRV.IBI as response variable and random effects on ParticipantID.
+  * From the full model summary with random effects, it can be observed that only Question.Type word and video is significant with positive estimate values. Although, SAI.Score and Question.Order has a positive estimate, they are still not significant and hence can be removed from the model.
+  * From the random effects plot for the full model, it can be inferred that participants S026, S025, S024, S015 etc have strong positive random effect indicating that they have higher heart rate variability during the exam. Thereby leading to fluctuation in heart rates in these participants.
+  * However, for participants which are to the left of average line have lower heart rate variability levels indicating constant heart rates during the exam.
+  * The model is further optimized by removing each variable that is not significant manually in the order of it's p-value.
+  * Grade is removed first and a drop in AIC is observed from 1540.94 to 1534 with all other variables still being non-significant expect Question.Type.
+  * On further optimizing the model, we remove Grade, SAI.Score and Gender to obtain an optimal model with only Question.Type predictor with negative estimates and random effect on ParticipantID with an AIC of 1515 and R2 of 0.78.
+  * This indicates that as heart rate variability decreases with change in 
+  * On removing the non-significant predictors to obtain the optimal model, no drastic change in R2 can be observed from 0.79 to 0.78.
+  * This indicates that, video question type can lead to more heart rate variability in participants.
+  * From the predictor plots for Question.Type against HRV.IBI, it can be observed that word exam type and abstract exam type have almost same heart rate variability with video having higher heart rate variability. 
+  * The reason for this is that video exam includes a bit of humour in answering them and thus various participants have different reactions to same question and have more variability between the questions attempting video exam questions.
+  
+\newpage
+# Modeling Grade vs fixed effects and  Normalized-type stress variables
+
+## Attempt.correctness Full Model with scaled variables
+
+```{r echo=FALSE}
+
+#####################################
+## Modeling Grade vs fixed effects and  Normalized-type stress variables
+#####################################
+FullModel <- glmer(grade ~ Gender + Question.Type + q.solv.time + pp_log_normalized + hr.e4_perfect_normalized + SAI.Score + hrv.ibi_normalized + Question.Order
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FullModel)
+anova(FullModel)
+```
+
+
+**Methodology Justification & Insights**:
+
+  * We use glmer with binomial family to apply logistic regression on Attempt.Correctness ( grade ) with Gender, Question.Type, Question Solving time, SAI.score, normalized log perspiration and normalized log heart rate with Question.Name as random effect
+  * The reason why Question.name is used as random effect here is that the same question.name is measured multiple times for different participants taking the exam.
+  * From the Full model for logistic regression to predict accuracy score, it can be observed that both normalized HR.E4_perfect and log perspiration are not significant with p-value > 0.05.
+  * The attempt.correctness can be strongly estimated by Question.Type and question solving time with high positive estimate values.
+  * We initially start with a full model with an AIC of 949.49 and achieve an optimal model of 945.82.
+  * On optimizing the model by manually removing normalized log perspiration variable, it can be observed that there is an increase in AIC value instead of decreasing and hence we retain this predictor variable in the model.
+  * Further, we remove Gender predictor variable as it has the next highest p-value without significance after normalized log perspiration and observe that AIC has reduced from 949.49 to 945.82 with almost same R-squared value indicating an improvement in the model.
+  * HR.E4_perfect predictor variable has the next highest p-value without significance ( other than normalized perspiration variable ) and on removing this variable from the model, a huge increase in AIC from 945.82 to 992.86 can be observed, indicating that removal of HR.E4_perfect can lead to reduction in accuracy of the model.
+  * Hence, our final optimal model contains Question.Type, Question solving time, normalized HR.E4_perfect, normalized log perspiration and normalized HRV.IBI to predict the attempt.correctness ( grade ) variable. 
+  
+\newpage
+## Manual Optimization
+## Remove Perinasal Perspiration 
+
+```{r echo=FALSE}
+
+FM <- glmer(grade ~ Gender + Question.Type + q.solv.time + hr.e4_perfect_normalized + SAI.Score + hrv.ibi_normalized + Question.Order
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FM)
+anova(FM)
+```
+
+\newpage
+## Remove Gender
+
+```{r echo=FALSE}
+
+FM <- glmer(grade ~ Question.Type + q.solv.time + pp_log_normalized + hr.e4_perfect_normalized + SAI.Score + hrv.ibi_normalized + Question.Order
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FM)
+anova(FM)
+```
+
+\newpage
+## Remove HR.E4_perfect
+
+```{r echo=FALSE}
+
+FM <- glmer(grade ~ Question.Type + q.solv.time + pp_log_normalized + SAI.Score + hrv.ibi_normalized + Question.Order
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FM)
+anova(FM)
+```
+
+\newpage
+## Remove HRV.IBI
+```{r echo=FALSE}
+
+FM <- glmer(grade ~ Question.Type + q.solv.time + pp_log_normalized + SAI.Score + Question.Order + hr.e4_perfect_normalized +
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FM)
+anova(FM)
+```
+
+\newpage
+## Final Optimal Model
+```{r echo=FALSE}
+
+FM <- glmer(grade ~ Question.Type + q.solv.time + pp_log_normalized + hr.e4_perfect_normalized + SAI.Score + hrv.ibi_normalized + Question.Order
+  + (1 | Question.Name), family = binomial, data = Qlevel_rl)
+summ(FM)
+anova(FM)
+```
+
+\newpage
+## Attempt.Correctness Fixed effects plot
+
+```{r echo=FALSE}
+## Here we will plot the fixed effects 
+plot_model(FM, "est", sort = TRUE, show.values = TRUE, value.offset = .3, xlab = "")
+```
+
+\newpage
+## Attempt.Correetness random effects plot
+
+```{r echo=FALSE, fig.width=10, fig.height=10}
+## Here we will plot the random effects
+re.plot <- plot_model(FM, "re")
+re.plot
+```
+
+**Insights** :
+  
+  * It can be observed that predictor variables with positive estimate value of the optimal model are on right side of vline in odds ratio plot indicating positive significance in predicting attempt.correctness label.
+  * However, SAI.Score and Question.Order has odds ratios less than 1, which indicates a negative relationship that as SAI.score increases, the odds of attempt.correctness decrease. In real world as well, as stress anxiety increases, the accuracy of correctness decreases due to higher stress.
+  * Similarly, if the question order is same, participants can the answer the question correctly by knowing the question order in prior. So, as the question order changes, the attempt.correctness might decrease.
+
+

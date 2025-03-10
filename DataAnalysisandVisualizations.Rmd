@@ -1,0 +1,1122 @@
+---
+title: "COSC 6323 Project Milestone -1"
+author: 
+  - "Anirudh Kalva - 2288613"
+  - "Venkata Kausik Renduchintala - 2260419"
+output:
+  pdf_document: 
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+
+```{r cars, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(latex2exp)
+library(lme4)
+library(readr)
+library(lmerTest)
+library(lattice)
+library(cowplot)
+library(ggpubr)
+library(gridExtra)
+library(kableExtra)
+library(lme4)
+require(ggpmisc) # stat on plots with facets
+library(rstatix) # tests
+library(qqplotr)
+library(reshape)
+
+theme_set(theme_classic()) # set the theme to classic
+theme_update(plot.title = element_text(hjust = 0.5)) # center the title
+
+```
+
+
+```{r pressure, echo=FALSE, warning=FALSE}
+all.df_dataset1 = read.csv(paste0("C:/Users/jsaya195/Documents/Data/Affective-Math-Dataset_3.csv"), stringsAsFactors = T)
+
+all.df2 = all.df_dataset1
+
+#all.df2 <- all.df2 %>% drop_na()
+
+# colSums(is.na(all.df2))
+
+```
+# Boxplots
+
+## Perspiration Boxplot
+```{r echo=FALSE,fig.width=10, warning=FALSE}
+n_fun <- function(x) {
+  return(data.frame(y = mean(x) +30, label = paste0("~italic(n)", " == ", length(x))))
+}
+
+init_count_data <- all.df2 %>%
+  group_by(ParticipantID) %>%
+  summarise(n_Perspiration = sum(!is.na(Perspiration)),
+            n_HR.E4 = sum(!is.na(HR.E4)),
+            n_HR.AW = sum(!is.na(HR.AW)),
+            n_HRV.IBI = sum(!is.na(HRV.IBI)),
+            uq_Perspiration=quantile(Perspiration, probs = 0.75, na.rm = TRUE),
+uq_HR.E4=quantile(HR.E4, probs = 0.75, na.rm = TRUE),
+uq_HR.AW=quantile(HR.AW, probs = 0.75, na.rm = TRUE),
+uq_HRV.IBI=quantile(HRV.IBI, probs = 0.75, na.rm = TRUE))
+
+ggplot(all.df2, aes(x = ParticipantID, y = Perspiration)) +
+  geom_boxplot() +
+  labs(title = "Perspiration by Participant ID", x = "Participant ID", y = "Perspiration") +
+  scale_x_discrete(limits = unique(all.df2$ParticipantID)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.ticks.x = element_line(size = 0.5))+
+   geom_text(data = init_count_data,
+            aes(label = paste("n =", n_Perspiration)), 
+            x = factor(init_count_data$ParticipantID), y =init_count_data$uq_Perspiration, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+
+```
+
+## Perspiration Boxplot Without S022 
+```{r echo=FALSE,fig.width=10, warning=FALSE}
+# Filter out participant "S002"
+data_filtered <- all.df2[all.df2$ParticipantID != "S022", ]
+
+norm_init_count_data <- data_filtered %>%
+  group_by(ParticipantID) %>%
+  summarise(n_Perspiration = sum(!is.na(Perspiration)),
+            n_HR.E4 = sum(!is.na(HR.E4)),
+            n_HR.AW = sum(!is.na(HR.AW)),
+            n_HRV.IBI = sum(!is.na(HRV.IBI)),
+            uq_Perspiration=quantile(Perspiration, probs = 0.75, na.rm = TRUE),
+uq_HR.E4=quantile(HR.E4, probs = 0.75, na.rm = TRUE),
+uq_HR.AW=quantile(HR.AW, probs = 0.75, na.rm = TRUE),
+uq_HRV.IBI=quantile(HRV.IBI, probs = 0.75, na.rm = TRUE))
+
+ggplot(data_filtered, aes(x = ParticipantID, y = Perspiration)) +
+  geom_boxplot()  +
+  labs(title = "Perspiration by Participant ID", x = "Participant ID", y = "Perspiration") +
+  scale_x_discrete( # For better x-axis label handling
+    limits = unique(data_filtered$ParticipantID)  # Set specific labels
+  )+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),  # Adjust text alignment
+        axis.ticks.x = element_line(size = 0.5))+ geom_text(data = norm_init_count_data,
+            aes(label = paste("n =", n_Perspiration)), 
+            x = factor(norm_init_count_data$ParticipantID), y =norm_init_count_data$uq_Perspiration, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+```
+
+## HR.E4 Boxplot
+```{r echo=FALSE,fig.width=10, warning=FALSE}
+#HR.E4
+ggplot(all.df2, aes(x = ParticipantID, y = HR.E4)) +
+  geom_boxplot()  +
+  labs(title = "HR.E4 by Participant", x = "Participant ID", y = "HR.E4") +
+  scale_x_discrete( # For better x-axis label handling
+    limits = unique(all.df2$ParticipantID)  # Set specific labels
+  )+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),  # Adjust text alignment
+        axis.ticks.x = element_line(size = 0.5))+geom_text(data = norm_init_count_data,
+            aes(label = paste("n =", n_HR.E4)), 
+            x = factor(norm_init_count_data$ParticipantID), y =norm_init_count_data$uq_HR.E4, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+
+```
+
+## HR.AW Boxplot
+```{r echo=FALSE, fig.width=10,warning=FALSE, , echo=FALSE}
+#HR.AW
+ggplot(all.df2, aes(x = ParticipantID, y = HR.AW)) +
+  geom_boxplot()  +
+  labs(title = "HR.AW by Participant", x = "Participant ID", y = "HR.AW") +
+  scale_x_discrete( # For better x-axis label handling
+    limits = unique(all.df2$ParticipantID)  # Set specific labels
+  )+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),  # Adjust text alignment
+        axis.ticks.x = element_line(size = 0.5))+geom_text(data = norm_init_count_data,
+            aes(label = paste("n =", n_HR.AW)), 
+            x = factor(norm_init_count_data$ParticipantID), y =norm_init_count_data$uq_HR.AW, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+```
+
+## HR.IBI Boxplot
+```{r echo=FALSE, fig.width=10,warning=FALSE, , echo=FALSE}
+#HRV
+ggplot(all.df2, aes(x = ParticipantID, y = HRV.IBI)) +
+  geom_boxplot()  +
+  labs(title = "HRV.IBI by Participant ID", x = "Participant ID", y = "HRV") +
+  scale_x_discrete( # For better x-axis label handling
+    limits = unique(all.df2$ParticipantID)  # Set specific labels
+  )+
+  theme(axis.text.x = element_text(angle  = 90, vjust = 0.5),  # Adjust text alignment
+        axis.ticks.x = element_line(size = 0.5))+geom_text(data = norm_init_count_data,
+            aes(label = paste("n =", n_HRV.IBI)), 
+            x = factor(norm_init_count_data$ParticipantID), y =norm_init_count_data$uq_HRV.IBI, hjust = -0.2, vjust = -0.75, size = 3,angle=90)
+```
+
+
+```{r warning=FALSE, , eval=FALSE, include=FALSE}
+rounded_timestamp <- function(timestamp) {
+  as.POSIXct(round(as.numeric(timestamp)/ 300)*300,origin = "1970-01-01" )
+}
+
+all.df2_cut10min <- all.df2 %>%
+    group_by(ParticipantID, Question.Type) %>%
+    mutate(timestamp_rounded = rounded_timestamp(Time)) %>%
+    group_by(timestamp_rounded) %>%
+    summarize(across(where(~ !is.factor(.)), mean), 
+              ParticipantID = first(ParticipantID),
+              Question.Type = Question.Type
+              ) %>%
+    ungroup()
+
+#all.df2 <- all.df2_cut10min
+
+```
+
+# Step 1: Line Plots
+## Raw Data Visualization
+
+```{r echo=FALSE, fig.height=8, fig.width=10, message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+# Assuming you have a CSV file with the physiological data
+# Replace with your actual file path and column names
+# Here we assume that the data frame has columns named 'Participant', 'Time', 'PP', 'HRE4', 'HRAW', 'HRV'
+
+# Define the number of participants to plot per page
+participants_per_page <- 5
+
+all.df2 <- all.df2 %>% 
+  filter(ParticipantID != "S022",Question.Type !="Example")
+
+# Find out the total number of participants
+total_participants <- length(unique(all.df2$ParticipantID))
+
+# Calculate the number of pages needed
+num_pages <- ceiling(total_participants / participants_per_page)
+
+global_min_max <- lapply(all.df2[, c("Perspiration", "HR.E4", "HR.AW", "HRV.IBI")], function(x) {
+  c(min_value = min(x, na.rm = TRUE), max_value = max(x, na.rm = TRUE))
+})
+
+# Function to create plots for one participant
+plot_for_participant <- function(participant_data,heading) {
+  PP_participant_means <- participant_data %>%
+            group_by(ParticipantID) %>%
+            summarise(MeanPerspiration = mean(Perspiration, na.rm = TRUE),n = sum(!is.na(Perspiration)))
+  HRAW_participant_means <- participant_data %>%
+            group_by(ParticipantID) %>%
+            summarise(MeanHRAW = mean(participant_data$HR.AW, na.rm = TRUE),n = sum(!is.na(HR.AW)))
+  HRE4_participant_means <- participant_data %>%
+            group_by(ParticipantID) %>%
+            summarise(MeanHRE4 = mean(participant_data$HR.E4, na.rm = TRUE),n = sum(!is.na(HR.E4)))
+  HRVIBI_participant_means <- participant_data %>%
+            group_by(ParticipantID) %>%
+            summarise(MeanHRVIBI = mean(participant_data$HRV.IBI, na.rm = TRUE),n = sum(!is.na(HRV.IBI)))
+            
+ participant_data$ParticipantID <- factor(participant_data$ParticipantID)
+  plots <- list()
+  plots[[1]] <-ggplot(participant_data, aes(x = Time, y = Perspiration)) +
+  geom_line() +
+  geom_hline(data = PP_participant_means, aes(yintercept = MeanPerspiration),color = "blue", show.legend = FALSE) +
+    geom_text(data = PP_participant_means, aes(label = paste("n =", n), x = Inf, y = Inf),
+              position = position_nudge(y = 0), hjust = 2, vjust = 2) +
+  coord_cartesian(ylim = c(global_min_max$Perspiration[1], global_min_max$Perspiration[2]-0.004),xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(global_min_max$Perspiration[1]+0.004, global_min_max$Perspiration[2]-0.004, by = 0.004),labels = scales::number_format(accuracy = 0.001)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500), labels = c(0, 2500, 5000, 7500)) +
+  labs(x ="Time [s]", y = "") + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+          strip.text = element_blank(),
+          plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text.y.left = element_text(angle = 90)) +
+  facet_grid(rows = vars(ParticipantID), switch = "y")
+
+  plots[[2]] <- ggplot(participant_data, aes(x = Time)) +  geom_line(aes(y = HR.E4, color = "HR.E4")) +
+     geom_text(data = HRE4_participant_means, 
+              aes(label = paste0("n[HR.E4] == ", n)), 
+              parse = TRUE, hjust = 1.5, vjust = 1, 
+              x = Inf, y = 125, 
+              # size = 3, 
+              color = "black") +
+    geom_text(data = HRAW_participant_means, 
+              aes(label = paste0("n[HR.AW] == ", n)), 
+              parse = TRUE, hjust = 1.5, vjust = 0.5, 
+              x = Inf, y = 100, 
+              # size = 3, 
+              color = "black") +
+    geom_point(aes(x = Time, y = HR.AW, color = "HR.AW"), alpha = 0.025) + 
+    geom_hline(data = HRAW_participant_means, aes(yintercept = MeanHRAW),color = "blue", show.legend = FALSE) +
+  geom_hline(data = HRE4_participant_means, aes(yintercept = MeanHRE4),color = "orange", show.legend = FALSE) +
+     scale_color_manual(name = "Signal",values = c("HR.E4" = "black","HR.AW"="red"))  +
+    coord_cartesian(ylim = global_min_max$HR.E4,xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(global_min_max$HR.E4[1]+1, global_min_max$HR.E4[2]+1, by = 25)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500)) +
+    labs(x ="Time [s]", y = "") + 
+    theme(
+      legend.position = "none",
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+      plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text = element_blank()) +
+    facet_grid(rows = vars(ParticipantID))
+
+  plots[[3]] <- ggplot(participant_data, aes(x = Time, y = HRV.IBI)) + geom_line() +
+    geom_hline(data = HRVIBI_participant_means, aes(yintercept = MeanHRVIBI),color = "blue", show.legend = FALSE) +
+    geom_text(data = HRVIBI_participant_means, aes(label = paste("n =", n), x = Inf, y = Inf),
+              position = position_nudge(y = 0), hjust = 2, vjust = 2) +
+    coord_cartesian(ylim = c(global_min_max$HRV.IBI[1], global_min_max$HRV.IBI[2]),xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(global_min_max$HRV.IBI[1]+0.4, global_min_max$HRV.IBI[2], by = 0.4)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500)) +
+    theme(axis.text.y = element_text("")) + 
+    labs(x ="Time [s]", y = "") + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+          plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text = element_blank()) +
+    facet_grid(rows = vars(ParticipantID))
+  
+      plots[[1]] <- plots[[1]] + ggtitle(bquote(bold(PP ~ "[" * degree * "C"^2 * "]")))
+      plots[[2]] <- plots[[2]] + ggtitle(paste("HR.E4 & HR.AW [BPM]"))
+      plots[[3]] <- plots[[3]] + ggtitle(paste("HRV [ms]")) 
+  combined_plot <- ggarrange(plotlist = plots, ncol = 3, common.legend = TRUE, legend = "right")+
+  ggtitle(paste0("Raw Plots Plot - [", heading, "]")) +
+  theme(plot.title = element_text(hjust = 0.5, color = "black", margin = margin(b = 10)))
+  
+  return(combined_plot)
+}
+
+# Iterate over pages and participants to create and save the plots
+for (page in 1:num_pages) {
+  # Subset the data for this page
+  participants_for_page <- unique(all.df2$ParticipantID)[((page - 1) * participants_per_page + 1):
+                                                      min(page * participants_per_page, total_participants)]
+   heading <- paste0(participants_for_page[1], ":", participants_for_page[length(participants_for_page)])
+  participant_data <- all.df2 %>%
+                filter(ParticipantID %in% participants_for_page)
+  participant_plots <- plot_for_participant(participant_data=participant_data,heading)
+  print(participant_plots)
+  ggsave(paste0("Raw_Data_Plots/Raw_Data_physiological_signals_page_", page, ".png"), participant_plots, width = 15, height = 8)
+  cat("\n\n")
+}
+
+```
+
+## Normalized Data Visualization
+```{r echo=FALSE, fig.height=8, fig.width=10, warning=FALSE, , echo=FALSE}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+# Assuming you have a CSV file with the physiological data
+# Replace with your actual file path and column names
+# Here we assume that the data frame has columns named 'Participant', 'Time', 'PP', 'HRE4', 'HRAW', 'HRV'
+
+# Define the number of participants to plot per page
+participants_per_page <- 5
+
+
+
+# Find out the total number of participants
+total_participants <- length(unique(all.df2$ParticipantID))
+
+# Calculate the number of pages needed
+num_pages <- ceiling(total_participants / participants_per_page)
+
+# Function to create plots for one participant
+plot_for_participant <- function(participant_data, heading) {
+baseline_means <- participant_data %>%
+    summarise(mean_hr_e4 = mean(HR.E4, na.rm = TRUE),
+              mean_hr_aw = mean(HR.AW, na.rm = TRUE),
+              mean_hr_v = mean(HRV.IBI, na.rm = TRUE),
+              mean_perspiration = mean(Perspiration, na.rm = TRUE)) %>%
+    as.list()
+
+  # Subtract baseline means from each participant's data
+  participant_data <- participant_data %>%
+    mutate(HR.E4 = HR.E4 - baseline_means$mean_hr_e4,
+           HR.AW = HR.AW - baseline_means$mean_hr_aw,
+           HRV.IBI = HRV.IBI - baseline_means$mean_hr_v,
+           Perspiration = Perspiration - baseline_means$mean_perspiration)
+  
+  participant_means <- participant_data %>%
+    group_by(ParticipantID) %>%
+    summarise(MeanPerspiration = mean(Perspiration, na.rm = TRUE),
+            MeanHRAW = mean(HR.AW, na.rm = TRUE),
+            MeanHRE4 = mean(HR.E4, na.rm = TRUE),
+            MeanHRVIBI = mean(HRV.IBI, na.rm = TRUE),
+            n_Perspiration = sum(!is.na(Perspiration)),
+            n_HRAW = sum(!is.na(HR.AW)),
+            n_HRE4 = sum(!is.na(HR.E4)),
+            n_HRVIBI = sum(!is.na(HRV.IBI)))
+
+  # Recalculate the minimum and maximum values for each signal
+  min_hr_e4 <- min(participant_data$HR.E4, na.rm = TRUE)
+  max_hr_e4 <- max(participant_data$HR.E4, na.rm = TRUE)
+  min_hr_aw <- min(participant_data$HR.AW, na.rm = TRUE)
+  max_hr_aw <- max(participant_data$HR.AW, na.rm = TRUE)
+  min_hr_v <- min(participant_data$HRV.IBI, na.rm = TRUE)
+  max_hr_v <- max(participant_data$HRV.IBI, na.rm = TRUE)
+  min_perspiration <- min(participant_data$Perspiration, na.rm = TRUE)
+  max_perspiration <- max(participant_data$Perspiration, na.rm = TRUE)
+  
+  participant_data$ParticipantID <- factor(participant_data$ParticipantID)
+
+  # Create plots
+  plots <- list()
+
+  # Plot for Perspiration
+  plots[[1]] <- ggplot(participant_data, aes(x = Time, y = Perspiration)) + geom_line() +
+    geom_text(data =participant_means , aes(label = paste("n =",n_Perspiration), x = Inf, y = Inf),
+              position = position_nudge(y = 0), hjust = 2, vjust = 2) +
+    coord_cartesian(ylim = c(-0.005,0.010), xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(-0.005,0.010, by = 0.005)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500)) +
+    labs(y = "", x = "Time [s]")  + 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+          strip.text = element_blank(),
+          plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text.y.left = element_text(angle = 90)) +
+  facet_grid(rows = vars(ParticipantID), switch = "y")
+
+  # Plot for HR.E4 & HR.AW
+  plots[[2]] <- ggplot(participant_data, aes(x = Time)) + geom_line(aes(y = HR.E4, color = "HR.E4")) +
+    geom_point(aes(x = Time, y = HR.AW, color = "HR.AW"), alpha = 0.025) +
+    geom_text(data = participant_means, 
+              aes(label = paste0("n[HR.E4] == ", n_HRE4)), 
+              parse = TRUE, hjust = 1.3, vjust = 1, 
+              x = Inf, y = 60, 
+              # size = 3, 
+              color = "black") +
+    geom_text(data = participant_means, 
+              aes(label = paste0("n[HR.AW] == ", n_HRAW)), 
+              parse = TRUE, hjust = 1.3, vjust = 0.8, 
+              x = Inf, y = 40, 
+              # size = 3, 
+              color = "black") +
+    scale_color_manual(name = "Signal",values = c("HR.E4" = "black", "HR.AW" = "red")) +
+    coord_cartesian(ylim = c(-40,60), xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(-40,60, by = 20)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500)) +
+    labs(y = "", x ="Time [s]") +
+    theme(
+      legend.position = "none",
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+      plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text = element_blank()) +
+    facet_grid(rows = vars(ParticipantID))
+
+  # Plot for HRV
+  plots[[3]] <- ggplot(participant_data, aes(x = Time, y = HRV.IBI)) + geom_line() + 
+    geom_text(data = participant_means, aes(label = paste("n =", n_HRVIBI), x = Inf, y = Inf),
+              position = position_nudge(y = 0), hjust = 2, vjust = 2) +
+    coord_cartesian(ylim = c(-1,1), xlim = c(0, 9500)) +
+    scale_y_continuous(breaks = seq(-0.5,1, by = 0.5)) +
+    scale_x_continuous(breaks = seq(0, 9500, by = 2500)) +
+    theme(axis.text.y = element_text("")) +
+    labs(y = "", x = "Time [s]")+ 
+    theme(panel.border = element_rect(color = "black", fill = NA, size = 1),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          panel.spacing = unit(2, "lines"),
+          plot.title = element_text(size = 10,face="bold",margin = margin(b = 10)),
+          strip.text = element_blank()) +
+    facet_grid(rows = vars(ParticipantID))
+
+    plots[[1]] <- plots[[1]] + ggtitle(expression(paste(Delta,"PP [", degree, "C"^2, "]")))
+plots[[2]] <- plots[[2]] + ggtitle(expression(paste(Delta,"HR.E4 & ",Delta,"HR.AW [BPM]")))
+plots[[3]] <- plots[[3]] + ggtitle(expression(paste(Delta,"HRV [ms]")))
+  combined_plot <- ggarrange(plotlist = plots, ncol = 3, common.legend = TRUE, legend = "right")+
+  ggtitle(paste0("Normalized Plots Plot - [", heading, "]")) +
+  theme(plot.title = element_text(hjust = 0.5, color = "black", margin = margin(b = 10)))
+  return(combined_plot)
+}
+
+# Iterate over pages and participants to create and save the plots
+for (page in 1:num_pages) {
+  # Subset the data for this page
+  participants_for_page <- unique(all.df2$ParticipantID)[((page - 1) * participants_per_page + 1):
+                                                      min(page * participants_per_page, total_participants)]
+  
+  heading <- paste0(participants_for_page[1], ":", participants_for_page[length(participants_for_page)])
+   
+  participant_data <- all.df2 %>%
+                filter(ParticipantID %in% participants_for_page)
+  participant_plots <- plot_for_participant(participant_data=participant_data,heading)
+  print(participant_plots)
+  ggsave(paste0("Normalized_Plots/Norm_physiological_signals_page_", page, ".png"), participant_plots, width = 15, height = 8)
+   cat("\n\n")
+}
+```
+
+## Combine Boxplots
+
+```{r echo=FALSE, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(grid)
+
+# Function to calculate count of observations and return as label
+get_n_label <- function(data) {
+  label <- paste("n =", length(data))
+  return(label)
+}
+
+df <- all.df2 %>%
+  filter(Question.Type %in% c("A", "V", "W")) %>%
+  group_by(ParticipantID, Question.Number, Question.Type) %>%
+  summarise_all(mean, na.rm = TRUE) 
+  
+count_data <- df %>%
+  filter(Question.Type %in% c("A", "V", "W")) %>%
+  group_by(Question.Type) %>%
+  summarise(n_Perspiration = sum(!is.na(Perspiration)),
+            n_HR.E4 = sum(!is.na(HR.E4)),
+            n_HR.AW = sum(!is.na(HR.AW)),
+            n_HRV.IBI = sum(!is.na(HRV.IBI)))
+# Merge count data with df
+df <- left_join(df, count_data, by = "Question.Type")
+
+# Function to calculate count of observations
+custom_theme <- function() {
+  theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5), 
+      panel.grid.major = element_blank(),     
+      panel.grid.minor = element_blank(),     
+      panel.border = element_rect(color = "black", fill = NA, size = 1),  
+      axis.ticks.y = element_line(),
+      axis.ticks.x = element_line()  
+    )
+}
+
+# Plot Perspiration, HR.E4, HR.AW, and HRV.IBI in 2 rows and 4 columns
+p1 <- ggplot(df, aes(x = Question.Type, y = Perspiration, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle(bquote("PP [" * degree * "C"^2 * "]")) +
+  theme_minimal() + custom_theme() +
+   geom_text(data = count_data,
+            aes(label = paste("n =", n_Perspiration)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p2 <- ggplot(df, aes(x = Question.Type, y = HR.E4, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle("HR.E4 [BPM]") +
+  theme_minimal() + custom_theme() +
+   geom_text(data = count_data,
+            aes(label = paste("n =", n_HR.E4)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p3 <- ggplot(df, aes(x = Question.Type, y = HR.AW, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle(paste("HR.AW [BPM]")) +
+  theme_minimal() + custom_theme()+
+   geom_text(data = count_data,
+            aes(label = paste("n =", n_HR.AW)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p4 <- ggplot(df, aes(x = Question.Type, y = HRV.IBI, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle("HRV [ms]") +
+  theme_minimal() + custom_theme() +
+   geom_text(data = count_data,
+            aes(label = paste("n =", n_HRV.IBI)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+baseline_means <- all.df2 %>%
+  summarise(mean_hr_e4 = mean(HR.E4, na.rm = TRUE),
+            mean_hr_aw = mean(HR.AW, na.rm = TRUE),
+            mean_hr_v = mean(HRV.IBI, na.rm = TRUE),
+            mean_perspiration = mean(Perspiration, na.rm = TRUE)) %>%
+  as.list()
+# Subtract baseline means from each participant's data
+norm_data <- all.df2 %>%
+  mutate(HR.E4 = HR.E4 - baseline_means$mean_hr_e4,
+         HR.AW = HR.AW - baseline_means$mean_hr_aw,
+         HRV.IBI = HRV.IBI - baseline_means$mean_hr_v,
+         Perspiration = Perspiration - baseline_means$mean_perspiration)
+
+df <- norm_data %>%
+  filter(Question.Type %in% c("A", "V", "W")) %>%
+  group_by(ParticipantID, Question.Number, Question.Type) %>%
+  summarise_all(mean, na.rm = TRUE)
+
+count_data <- df %>%
+  filter(Question.Type %in% c("A", "V", "W")) %>%
+  group_by(Question.Type) %>%
+  summarise(n_Perspiration = sum(!is.na(Perspiration)),
+            n_HR.E4 = sum(!is.na(HR.E4)),
+            n_HR.AW = sum(!is.na(HR.AW)),
+            n_HRV.IBI = sum(!is.na(HRV.IBI)))
+# Merge count data with df
+df <- left_join(df, count_data, by = "Question.Type")
+
+p5 <- ggplot(df, aes(x = Question.Type, y = Perspiration, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "",title = "Second Row Heading") +
+  ggtitle(expression(paste(Delta,"PP [" * degree * "C"^2 * "]"))) +
+  theme_minimal() + custom_theme()+
+  geom_text(data = count_data,
+            aes(label = paste("n =", n_Perspiration)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p6 <- ggplot(df, aes(x = Question.Type, y = HR.E4, fill = Question.Type)) +
+  geom_boxplot() + 
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle(expression(paste(Delta,"HR.E4 [BPM]"))) +
+  theme_minimal() + custom_theme()+
+  geom_text(data = count_data,
+            aes(label = paste("n =", n_HR.E4)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p7 <- ggplot(df, aes(x = Question.Type, y = HR.AW, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle(expression(paste(Delta,"HR.AW [BPM]"))) +
+  theme_minimal() + custom_theme() +
+  geom_text(data = count_data,
+            aes(label = paste("n =", n_HR.AW)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+p8 <- ggplot(df, aes(x = Question.Type, y = HRV.IBI, fill = Question.Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("orange", "lightblue", "green"), guide = FALSE)+
+  labs(x = NULL, y = "") +
+  ggtitle(expression(paste(Delta,"HRV [ms]"))) +
+  theme_minimal() + custom_theme()+
+  geom_text(data = count_data,
+            aes(label = paste("n =", n_HRV.IBI)), 
+            x = count_data$Question.Type, y = Inf, hjust = 3.5, vjust = -1, size = 3,angle=90)
+
+# Arrange plots and row headings
+row1 <- ggarrange(p1, p2, p3, p4, nrow = 1) +
+  ggtitle("Boxplots of Raw Values") +
+  theme(plot.title = element_text(size=12,hjust = 0.5, color = "red", margin = margin(b = 10)))
+
+# Arrange and title row 2 plots
+row2 <- ggarrange(p5, p6, p7, p8, nrow = 1) +
+  ggtitle("Boxplots of Normalized Values") +
+  theme(plot.title = element_text(size=12,hjust = 0.5, color = "red", margin = margin(b = 10)))
+
+# Combine row 1 and row 2 plots
+grid.arrange(row1, row2, nrow = 2)
+```
+
+## Summary Statistics
+```{r echo=FALSE, fig.height=8, fig.width=10, message=FALSE, warning=FALSE, paged.print=FALSE}
+relevant_df <- all.df2 %>% 
+  filter(Question.Type %in% c('A', 'V', 'W')) %>% 
+  select(Question.Type, Perspiration, HR.E4, HR.AW, HRV.IBI)
+
+# Melt the data frame to a long format
+df_long <- melt(relevant_df, id.vars = "Question.Type")
+
+# Calculate the statistics
+summary_table <- df_long %>% 
+  group_by(Question.Type, variable) %>%
+  summarise(
+    n = n(),
+    min = round(min(value, na.rm = TRUE),3),
+    mean = round(mean(value, na.rm = TRUE),3),
+    max = round(max(value, na.rm = TRUE),3),
+    SD = round(sd(value, na.rm = TRUE),3)
+  ) %>%
+  pivot_wider(
+    names_from = "Question.Type",
+    values_from = c(n, min, mean, max, SD)
+  ) %>%
+  mutate(
+    Variable = factor(variable, levels = c("Perspiration", "HR.AW", "HR.E4", "HRV.IBI"))
+  ) %>%
+  arrange(Variable) %>%
+  select(Variable, ends_with("A"), ends_with("V"), ends_with("W"))
+
+# Convert the summary table to a markdown table
+md_table <- kable(summary_table, format = "markdown",align = "c", caption = "Summary statistics for PP, HR.E4, HR.AW, HRV.IBI") %>%
+  kable_styling(full_width = FALSE, 
+                latex_options = "hold_position",
+                position = "center", 
+                font_size = 9)  %>% 
+                row_spec(0, angle = 60)
+md_table
+
+```
+
+## Insights
+
+1. **Raw Plots:**
+   - The raw plots display the data distribution of the 4 characteristics of subjects or the participant Heart Rate and Perspiration behavior while taking the exam irrespective of the exam or question types.
+   - **Perspiration (PP):**
+      - Perspiration (PP) indicates perinasal perspiration, which directly corresponds to sympathetic activation. During the relaxation period, these levels would ideally be low, and then potentially increase during the exam, particularly with the more challenging question types.
+      - The plots show fluctuations over time, suggesting changes in perspiration level indicating a change in anxiety levels over time.
+      - The plots for all subjects or participants for perspiration show a low level of anxiety for most of the participants except for a few participants who felt more anxiety.
+   
+   - **HR.E4 and HR.AW:**
+      - The second column shows combined data distribution of the Heart Rate measured using 2 devices E4 and an Apple watch both wore on different hands.
+      - There's noticeable variability in heart rate as captured by both devices, but the HR.E4 measurements tend to have more pronounced fluctuations compared to the HR.AW measurements.
+      - For some participants, the fluctuations seem different when measured in E4 and in an Apple watch where it shows very high heart rate with E4 and a low rate from an Apple watch. This might be due to poor fitting on the subject's hand or due to any physical disturbances which caused those uneven fluctuations.
+      - The number of heartbeats per minute (BPM) captured by the E4 is typically higher than those captured by the Apple Watch. This might indicate a potential difference in the sensitivity or accuracy of the two devices.
+   
+   - **Heart Rate Variability (HRV.IBI):**
+     - The graphs in the last column show the heart rate variability over time. HRV is a measure of the variation in time between each heartbeat and is measured in milliseconds (ms).
+     - The sample size for HRV data points is smaller than for perspiration, which suggests less frequent sampling or a shorter measurement period.
+     - The variability for each subject seems to be quite distinct, reflecting individual differences in the way they react to the exam.
+
+2. **Normalized plots:**
+   - **Normalized Perspiration (PP):**
+     - The perspiration data, now represented as **PP**, is centered around zero, which suggests that the data has been normalized by subtracting the mean.
+     - The fluctuations remain relatively small, indicating that perspiration levels did not vary widely within the timeframe of measurement.
+     
+   - **Normalized Heart Rate (HR.E4 & HR.AW):**
+     - Both **HR.E4** (E4 device, black) and **HR.AW** (Apple Watch, red) signals are presented together, suggesting that their data have been normalized in a similar manner. This would allow for direct comparison between the readings from the two devices.
+     - The black data points (HR.E4) show greater spread compared to the red data points (HR.AW), which may imply a higher level of variability in the readings from the E4 device, or potentially more noise in the signal for some participants.
+     
+   - **Normalized Heart Rate Variability (HRV):**
+     - The **HRV** values are also centered around zero, consistent with the normalization process.
+     - The normalized HRV graphs show a varying degree of spread among subjects, indicating differences in the variability of heartbeats during the measurement period.
+   - It is now possible to observe the comparative consistency of readings between the **HR.AW** and **HR.E4** across the subjects. The **HR.E4** still appears more volatile even after normalization, suggesting inherent differences in how the devices record or process the heart rate data.
+     
+   - **Methodolgy Justification:**
+     - After normalization, we can see patterns and variability without the influence of different scales or baselines.
+     - The normalization process allows for an analysis focused on the relative changes and variability within each physiological measure rather than absolute values, which can be affected by individual differences.
+     
+
+3. **Boxplots:**
+   - The boxplots show the data distribution of the participants aggregated at the exam question type level for the 4 signal types (Perspiration, HR.E4, HR.AW, and HRv) visualized for both the raw and normalized data.
+   
+      -**Raw Data:**
+       - As observed in the Perspiration plot, we can see there is a considerable overlap between the question types and it does have outliers.
+       - **Perspiration (PP):**
+          - The perspiration seems to be marginally more for the word type than the video and abstract. This means that the traditional form of the math exam i.e. the word type is more stressful than the new exam type i.e. the video type.
+       - **HR.E4:**    
+          - In the HR.E4 plot, we can observe that the distribution for A, V, and W type has overlap which implies that the values are at a similar range. The plot does show outliers means extreme levels of heart rate. From the plot, it can be indicated that, for the word question type, the distribution shows bigger Heart rates than the abstract and video.
+       - **HR.AW:**    
+          - The HR.AW distribution shows overlapping boxplots for A, V, and W question types along with some traces of outliers (mostly for the word type) indicating extreme stress levels.
+       - **HRV.IBI:**  
+          - The HRV plot shows the distribution of Heart rate variability at the question type level.
+          - The plot shows little overlapping and few indications of outliers.
+          - The HRV seems to be more for the video type when compared to abstract and word type which implies that the variation here is more.
+   
+    - **Normalized Data:**
+       - Here the boxplots are plotted for the normalized data.
+       - **Perspiration (PP):**
+          - Similar to the raw data boxplots, the perspiration has overlaps and some traces of outliers indicating higher anxiety levels, and it seems that the perspiration levels seem to be more for the word type here.
+       - **HR.E4 and HR.AW:**
+          - The data distributed for HR.E4 and HR.AW here show similar types of distribution with having overlaps between the question types and few traces of outliers and the most of the data is concentrated below zero.
+       - **HRV.IBI:**
+          - For the HRV, the distribution of the data points indicates overlapping distribution and the median here are zero or just above zero. The HRV seems more for the video question type.
+    - Here in the normalized data, the core variability has been reduced which implies that it subtracts noise and individual variability which makes the data usable for model fitting.
+
+# Step 2: FACS Plots - Signal Level
+
+## Momentary Stacked Plots
+
+```{r echo=FALSE,width=10, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(reshape2)
+
+# Assuming 'data' is your dataframe and it has been read in from a file or another source
+custom_colors <- c(
+  "F_Angry" = "#FF0000",
+  "F_Disgusted" = "#800000",
+  "F_Afraid" = "#FFD700",
+  "F_Happy" = "#008000",
+  "F_Sad" = "#0000FF",
+  "F_Surprised" = "#FFB700",
+  "F_Neutral" = "#AAAAAA"
+)
+# Filter data for only A, V, W question types
+filtered_data <- all.df2[all.df2$Question.Type %in% c('A', 'V', 'W'), ]
+emotion_cols <- c("F_Angry", "F_Disgusted", "F_Afraid", "F_Happy", "F_Sad", "F_Surprised", "F_Neutral")
+
+participants_per_page <- 8
+total_participants <- length(unique(all.df2$ParticipantID))
+
+# Calculate the number of pages needed
+num_pages <- ceiling(total_participants / participants_per_page)
+
+filtered_long_data <- filtered_data %>%
+  pivot_longer(cols = F_Angry:F_Neutral, names_to = "Emotion", values_to = "Probability") %>%
+  arrange(ParticipantID, Question.Type, Time)
+
+filtered_long_data <- filtered_long_data[!is.na(filtered_long_data$Emotion), ]
+
+filtered_long_data$Emotion <- factor(filtered_long_data$Emotion, levels = c("F_Angry", "F_Disgusted", "F_Afraid", "F_Happy", "F_Sad", "F_Surprised", "F_Neutral"))
+
+plot_for_participant <- function(participant_data, participants_to_plot,heading) {
+  participant_data$ParticipantID <- factor(participant_data$ParticipantID, levels = participants_to_plot)
+  # Create plots
+  plot <- ggplot(participant_data, aes(x = Time, y = Probability, fill = Emotion)) +
+  geom_area(position = 'stack') +
+  facet_wrap(~ ParticipantID + Question.Type, nrow = 4, ncol = 6) +
+  theme_bw() +
+  labs(title = "Stacked Emotions Over Time for Each Question Type",
+       x = "Time (seconds)",
+       y = "Probability") +
+  scale_fill_manual(values = custom_colors) +
+  theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+strip.text.x = element_text(size = 6), # Adjust text size as needed
+        strip.background =  element_rect(color = "black", fill = "grey", size = 0.2),
+        panel.spacing = unit(0.1, "lines"), # Adjust spacing as needed
+        axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.ticks = element_blank()) +
+  ggtitle(paste0("Momentary Stacked Plots Plot - [", heading, "]")) +
+  theme(plot.title = element_text(hjust = 0.5, color = "black", margin = margin(b = 10)))
+
+  return(plot)
+}
+
+# Iterate over pages and participants to create and save the plots
+for (page in 1:num_pages) {
+  # Subset the data for this page
+  participants_for_page <- unique(all.df2$ParticipantID)[((page - 1) * participants_per_page + 1):
+                                                      min(page * participants_per_page, total_participants)]
+  heading <- paste0(participants_for_page[1], ":", participants_for_page[length(participants_for_page)])
+  temp_d <- filtered_long_data %>%
+  filter(ParticipantID %in% participants_for_page)
+  grid_plot <- plot_for_participant(temp_d, participants_for_page,heading)
+  print(grid_plot)
+  cat("\n\n")
+  # Save the grid plot to a file
+   ggsave(paste0("Momentary_Plots/Momentary_stacked_plot_", page, ".png"), grid_plot, width = 15, height = 8)
+}
+
+dominant_emotion_df <- filtered_data %>%
+  select(ParticipantID, Question.Type, Time, all_of(emotion_cols)) %>%
+  mutate(Emotion = apply(select(., all_of(emotion_cols)), 1, function(x) {
+    valid_values <- na.omit(x)
+    if (length(valid_values) == 0) return(NA)
+    names(valid_values)[which.max(valid_values)]
+  })) %>%
+  filter(!is.na(Emotion)) %>%
+  group_by(ParticipantID, Question.Type, Emotion) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  group_by(ParticipantID, Question.Type) %>%
+  mutate(Total = sum(Count), Proportion = Count / Total) %>%
+  ungroup() %>%
+  mutate(Emotion = factor(Emotion, levels = emotion_cols))
+```
+
+## Proportion Stacked Plot
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+
+ggplot(dominant_emotion_df, aes(x = ParticipantID, y = Proportion, fill = Emotion)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c(
+    "F_Angry" = "#E41A1C",      # Red
+    "F_Disgusted" = "#800000",  # Maroon
+    "F_Afraid" = "#FFD700",     # Gold
+    "F_Happy" = "#4DAF4A",      # Green
+    "F_Sad" = "#3A00FF",        # Blue
+    "F_Surprised" = "#FFB700",  # Yellow
+    "F_Neutral" = "#AAAAAA"      # Grey
+  )) +
+  labs(title = "Displayed Emotions - Question Type Level", x = "Participant ID", y = "") +
+  scale_y_continuous(labels = scales::percent) +
+  facet_wrap(Question.Type ~ .,  ncol = 1, strip.position = "left") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.line = element_line(color = "black"),
+         panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+        axis.ticks.x = element_line(size = 0.5),              # Set tick size
+        strip.background = element_rect(color = "black", fill = "grey"),                  # Remove facet background
+        strip.text = element_text(size = 8),
+        plot.title = element_text(size = 10,hjust = 0.5))
+```
+
+## Summary Statistics
+
+### Emotion Statistics by Question Type
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+emotion_data_summary <- dominant_emotion_df %>%
+  group_by(Question.Type, Emotion) %>%
+  summarise(n = n(), TotalEmotionCount = sum(Count), .groups = 'drop') %>%
+  group_by(Question.Type) %>%
+  mutate(Ratio = 100 * TotalEmotionCount/ sum(TotalEmotionCount), n = sum(TotalEmotionCount)) %>%
+  ungroup()
+
+wide_emotion_data <- emotion_data_summary %>%
+  pivot_wider(
+    id_cols = c(Question.Type, n),
+    names_from = Emotion,
+    values_from = c(Ratio),
+    names_glue = "{Emotion}_{.value}"
+  )
+
+kable(wide_emotion_data, format= "markdown",align = "c", caption = "Facial Emotion Statistics by Question Type") %>%
+  kable_styling(full_width = FALSE, 
+                latex_options = "hold_position",
+                position = "center", 
+                font_size = 9)  %>% 
+                row_spec(0, angle = 60)
+```
+
+### Summary Bar Plot
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+emotion_data_summary <- dominant_emotion_df %>%
+  group_by(Question.Type, Emotion) %>%
+  summarise(TotalEmotionCount = sum(Count), .groups = 'drop') %>%
+  group_by(Question.Type) %>%
+  mutate(Percentage = TotalEmotionCount/ sum(TotalEmotionCount), SE = sqrt(Percentage * (1 - Percentage) / sum(TotalEmotionCount)),
+    CI_upper = Percentage + qnorm(0.975) * SE,
+    CI_lower = Percentage - qnorm(0.975) * SE) %>%
+  ungroup()
+
+ggplot(emotion_data_summary, aes(x = Question.Type, y = Percentage, fill = Emotion)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_errorbar(
+    aes(ymin = CI_lower, ymax = CI_upper),
+    position = position_dodge(0.9),
+    width = 0.25
+  ) +
+  scale_fill_manual(values = c(
+    "F_Angry" = "#E41A1C",      # Red
+    "F_Disgusted" = "#800000",  # Maroon
+    "F_Afraid" = "#FFD700",     # Gold
+    "F_Happy" = "#4DAF4A",      # Green
+    "F_Sad" = "#0000FF",        # Blue
+    "F_Surprised" = "#FFB700",  # Yellow
+    "F_Neutral" = "#AAAAAA"      # Grey
+  )) +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = "Bar plots of the percentage of each emotion on Question Type",
+       x = "Question Type", y = "Percentage",
+       fill = "Emotion")
+
+```
+
+## Insights
+
+1.  **Momentary Stacked Plot:**
+
+  - The provided image displays a series of momentary stacked plots representing the range of emotions over time for different question types (A, V, W) across several participants:
+    
+   - Neutral (Grey) emotion appears to be dominant across many participants and question types, possibly indicating a calm or no reaction to the question types.
+   - Some participants show a higher proportion of fear(Afraid emotion) during certain question types, which may imply difficulty or stress associated with those questions.
+   - Happy and Sad emotions are less prominent overall but do appear in varying degrees across participants and question types, reflecting moments of excitement or challenge.
+  
+2.  **Proportion stacked Plot:**
+
+  -  The distribution shows different emotions for various subjects across three question types ('A', 'V', and 'W').
+
+  - Each bar represents 100% of the reported emotions for a subject within a specific question type and each colors represent different emotions.
+
+- From this chart, we can derive several insights:
+   - For many subjects, 'Neutral' seems to be the dominant emotion across all question types, suggesting that most of the showed neutral reactions to the questions.
+   - Apart from Neutral there is a lot of yellow indicating that most of the people are afraid to take the exam and the other common emotion is the sad indicated by the blue implies that the people are sad to take the exam.
+   - Certain subjects show a particularly high proportion of Happy responses to Video questions, suggesting a strong positive engagement with this question type for those particular subjects.
+   - Some subjects like S003 and S015 show almost no to little variability in emotional distribution across question types, while others (like S007 and S021) show some variation.
+
+3.  **Summary Statistics:**
+
+  - Analyzing the emotion statistics by question type:
+
+ - **Neutral** is the most common emotion across all types, highest in Video (V) and Word (W).
+
+ - **Happy** responses are more frequent in Abstract (A), indicating a possible rewarding effect of these questions.
+
+ - **Negative Emotions** (Angry and Disgusted) are somewhat more prevalent in Video (V), hinting at a potential for stronger negative reactions.
+
+ - **Afraid** and **Sadness** is consistently evoked across all question types, showing a steady emotional impact and **Afraid** responses peak with Abstract (A) questions, suggesting they might be more challenging or stimulating. 
+
+ - **Surprise** is rare in all types, with the least in Abstract (A), suggesting predictability in the content.
+
+ -In brief, Abstract questions tend to elicit a wider range of emotions, while Video and Word questions more often result in neutral reactions
+
+# Step 3: Gaze Analysis
+
+## Proportion Stacked Plots
+
+```{r echo=FALSE}
+gaze_vals <- c("CLOSED", "LEFT", "CENTER", "RIGHT")
+
+filtered_data <- all.df2 %>%
+  filter(Session == "Exam", G_Direction %in% gaze_vals,Question.Type %in% c('A', 'V', 'W')) %>%
+  select(ParticipantID, Question.Type, G_Direction, G_Ratio)
+
+g_direction_proportions <- filtered_data %>%
+  group_by(ParticipantID, Question.Type, G_Direction) %>%
+  summarise(Total = sum(G_Ratio, na.rm = TRUE), .groups = 'drop') %>%
+  group_by(ParticipantID, Question.Type) %>%
+  mutate(Proportion = Total / sum(Total)) %>%
+  ungroup()
+
+g_direction_proportions <- g_direction_proportions %>%
+  mutate(G_Direction = factor(G_Direction, levels = gaze_vals))
+  
+
+ggplot(g_direction_proportions, aes(x = ParticipantID, y = Proportion, fill = G_Direction)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c(
+    "CLOSED" = "black",
+    "LEFT" = "orange",
+    "CENTER" = "gray",
+    "RIGHT" = "red"
+  )) +
+  labs(title = "Proportion of Gaze Directions by Participant", x = "Participant ID", y = "") +
+  facet_wrap(Question.Type ~ ., , ncol = 1, strip.position = "left") +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        axis.line = element_line(color = "black"),
+         panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+        axis.ticks.x = element_line(size = 0.5),              # Set tick size
+        strip.background = element_rect(color = "black", fill = "grey"),                  # Remove facet background
+        strip.text = element_text(size = 8),
+        plot.title = element_text(size = 10,hjust = 0.5))
+
+filtered_data <- all.df2 %>%
+  filter(Session == "Exam", Question.Type != "Example", G_Direction %in% gaze_vals) %>%
+  select(ParticipantID, Question.Type, G_Direction)
+
+g_direction_summary <- filtered_data %>%
+  group_by(Question.Type, G_Direction) %>%
+  summarise(Freq = n(), .groups = 'drop') %>%
+  ungroup() %>%
+  complete(Question.Type, G_Direction, fill = list(Freq = 0)) %>%
+  filter(Question.Type != "Example") %>%
+  group_by(Question.Type) %>%
+  mutate(n = sum(Freq),
+         Percentage = Freq / n, SE = sqrt(Percentage * (1 - Percentage) / n),
+    CI_upper = Percentage + qnorm(0.975) * SE,
+    CI_lower = Percentage - qnorm(0.975) * SE) %>%
+  ungroup() %>%
+  arrange(G_Direction, Question.Type) %>%
+  mutate(G_Direction = factor(G_Direction, levels = gaze_vals))
+```
+
+## Summary Statistics
+
+### Table
+```{r echo=FALSE}
+g_direction_summary %>% select(Question.Type, G_Direction, Freq, Percentage, n) %>% kable(format= "markdown",align = "c", caption = "Gaze Direction Statistics by Question Type")%>%
+  kable_styling(full_width = FALSE,latex_options = "hold_position")
+```
+
+### Barplot
+```{r echo=FALSE}
+ggplot(g_direction_summary, aes(x = Question.Type, y = Percentage, fill = G_Direction)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_errorbar(
+    aes(ymin = CI_lower, ymax = CI_upper),
+    position = position_dodge(0.9),
+    width = 0.25
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual( values = c(
+    "CLOSED" = "#000000",
+    "LEFT" = "#FFB700",
+    "CENTER" = "#AAAAAA",
+    "RIGHT" = "#E41A1C"
+  )) +
+  theme_minimal() +
+  labs(title = "Bar plots of the percentage of gaze direction on Question Type",
+       x = "Question Type", y = "Percentage",
+       fill = "Gaze Direction")
+```
+
+## Insights
+
+  * From the above Gaze stacked bar plot, it is clearly evident that almost all participants are looking towards their right for all types of questions i.e ABSTRACT, WORD, VIDEO. 
+  * It can be understood that the examination hall setup be in that way making all students gaze to their right.
+  * However, it can be inferred that two participants with ParticipantID S012 and S025 are not gazing to the right but are looking in the CENTER making them unique from the remaining participants.
+  * Nevertheless S012 is gazing equally towards the right and center for the VIDEO question type while the participant's gaze was 80%-90% towards the CENTER for ABSTRACT and VIDEO question types.
+  * In case of S025, CENTER direction strongly dominates the participant's gaze direction with 90%-95% of contribution for all question types. 
+  * From the stacked plot, one can conclude that no participant during any question type closed their eyes except the participant with ParticipantID S001. But, it is practically impossible to not close the eyes for a human being during an examination in real world scenario. The missing observations of CLOSED gaze directions can be understood as the faulty / poor behavior of the device in capturing CLOSED eye moments.
+  * Participants S003, S015, S028, S029 tend to look at RIGHT direction for more than 99% of the time during the examination  
+  * The same observation can be made from the gaze summary statistics table and the gaze summary bar plot grouped by question type. It is evident that only 10 observations are made for CLOSED gaze direction for VIDEO and WORD question types and zero records for ABSTRACT question type which might not be completely true.
+  * **Summary Barplot Insights**:
+    * For each question type, all participants tend to gaze towards right with RIGHT being the most dominant gaze direction with more than 65% of contribution in the distribution
+    * With CENTER being the second most dominant gaze direction, CENTER direction contributes to an average of 30% data for all exam types. 
+    * A very minimal percentage of participants looked to their LEFT although the examination setup was made such that people look at a device on their RIGHT and look into CENTER into the monitor.
+    * The bar graph for CLOSED gaze direction is hardly visible from the summary barplot and the same is evident from the summary table with less than 10 records for CLOSED gaze direction.
+    
+
+
+
+# Step 4: SAI and SUS Scores
+
+## Boxplot
+```{r echo=FALSE, warning=FALSE, echo=FALSE}
+
+non_null_counts <- all.df2 %>%
+group_by(ParticipantID) %>%
+            summarise(SAI.Score = mean(SAI.Score, na.rm = TRUE),
+                      overall.Score = mean(overall.Score, na.rm = TRUE))
+non_null_counts <- non_null_counts %>%
+  summarise(SAI_Count = sum(!is.na(SAI.Score)), 
+            SUS_Count = sum(!is.na(overall.Score)),
+            mq_sai=quantile(SAI.Score, probs = 0.65, na.rm = TRUE),
+            mq_ss=quantile(overall.Score, probs = 0.65, na.rm = TRUE))
+sai_label <- paste("italic('n') == ", non_null_counts$SAI_Count)
+sus_label <- paste("italic('n') == ", non_null_counts$SUS_Count)
+# Create the boxplot and add the count as text on the plot
+p_sai <- ggplot(all.df2, aes(x = 1, y = SAI.Score)) +
+  geom_boxplot() +
+  geom_text(data = non_null_counts, aes(x = 0.95, y = mq_sai, label = sai_label), vjust = 0.5,hjust=0,parse= TRUE) +
+  labs(x = "Participant", y = "SAI Score") +
+  ggtitle("Boxplot of SAI Scores")
+# Boxplot of SUS scores
+p_ss<-ggplot(all.df2, aes(x = NULL, y = overall.Score)) +
+  geom_boxplot() +
+  geom_text(data = non_null_counts, aes(x = -0.05, y = mq_ss, label = sus_label), vjust = 0.5, hjust=0,parse= TRUE) +
+  labs(x = "Participant", y = "SUS Score") +
+  ggtitle("Boxplot of SUS Scores")
+
+ggarrange(p_sai, p_ss, ncol = 2)
+
+```
+
+## Insights
+
+  * It can be inferred from the boxplot of SAI scores that more than half of the data distribution is anxious since the psychometric threshold SAI score for anxiety is considered to be 40.
+  * Although the majority of the participants are not anxious, the boxplot depicts that atleast one third of the population is anxious since their SAI score is beyond the threshold value.
+  * The SUS score is used to measure the usability of the exam interface and since most of the data distribution has a SUS score above the threshold of 68, we can conclude that the interface of the app is well designed and usable for the examination.
+  * Also, the stress or the anxiety that is recorded can be attributed to the math in the examination and the app interface has nothing to do with the stress levels of the participants.
